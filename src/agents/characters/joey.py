@@ -3,6 +3,7 @@ from functools import lru_cache
 from src.agents import Agent
 
 class Joey(Agent):
+    """Joey Tribbiani character agent."""
 
     name = "Joey Tribbiani"
     emoji = "🍕"
@@ -28,6 +29,11 @@ class Joey(Agent):
 @lru_cache(maxsize=1)    
 def get_joey() -> Joey:
     """
-    Factory function to create a new instance of the Joey agent.
+    Return a cached Joey agent instance.
+
+    Returns
+    -------
+    Joey
+        Cached Joey agent.
     """
     return Joey()

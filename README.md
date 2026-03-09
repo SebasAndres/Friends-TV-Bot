@@ -42,6 +42,8 @@ cp .env.example .env
 | `MODEL_PROVIDER` | `ollama` | LLM provider to use: `ollama` or `gemini` |
 | `MODEL` | `qwen2:1.5b` | Model name (depends on the provider) |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL (only for `ollama`) |
+| `EMBEDDING_PROVIDER` | `MODEL_PROVIDER` | Embedding backend: `ollama` or `gemini` |
+| `EMBEDDING_MODEL` | provider default | Embedding model (e.g. `nomic-embed-text` or `text-embedding-004`) |
 | `GOOGLE_API_KEY` | — | [Google AI API key](https://aistudio.google.com/apikey) (only for `gemini`) |
 
 ### 4. Set up your LLM provider
@@ -50,6 +52,7 @@ cp .env.example .env
 
 ```bash
 ollama pull qwen2:1.5b
+ollama pull nomic-embed-text
 ```
 
 **Gemini** — set these in your `.env`:
@@ -57,6 +60,8 @@ ollama pull qwen2:1.5b
 ```
 MODEL_PROVIDER=gemini
 MODEL=gemini-2.0-flash
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_MODEL=text-embedding-004
 GOOGLE_API_KEY=your-api-key-here
 ```
 
@@ -81,6 +86,10 @@ uv run python main.py
 ```
 
 A random character will greet you. Type your messages and chat with them. Type `/exit` or `/quit` to leave.
+Useful commands:
+- `/load <path>`: index a local text file for retrieval context.
+- `/context` or `/ctx`: inspect currently indexed chunks.
+- `/history`: print chat history.
 
 ## Project Structure
 

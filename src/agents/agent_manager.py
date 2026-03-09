@@ -10,6 +10,7 @@ from src.agents import (
 )
 
 class AgentManager:
+    """Factory/cache helper for selecting character agents."""
 
     AVAILABLE_CONSTRUCTORS = {
         'joey': get_joey,
@@ -25,6 +26,11 @@ class AgentManager:
     def start_random_agent() -> Agent:
         """
         Randomly selects and starts an agent from the available agents.
+
+        Parameters
+        ----------
+        None
+            Static method with no runtime parameters.
 
         Returns
         -------

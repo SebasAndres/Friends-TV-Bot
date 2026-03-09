@@ -3,6 +3,7 @@ from functools import lru_cache
 from src.agents import Agent
 
 class Monica(Agent):
+    """Monica Geller character agent."""
 
     name = "Monica Geller"
     emoji = "🍳"
@@ -30,6 +31,11 @@ class Monica(Agent):
 @lru_cache(maxsize=1)
 def get_monica() -> Monica:
     """
-    Factory function to create a new instance of the Monica agent.
+    Return a cached Monica agent instance.
+
+    Returns
+    -------
+    Monica
+        Cached Monica agent.
     """
     return Monica()

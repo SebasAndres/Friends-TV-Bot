@@ -3,6 +3,7 @@ from functools import lru_cache
 from src.agents import Agent
 
 class Ross(Agent):
+    """Ross Geller character agent."""
 
     name = "Ross Geller"
     emoji = "🦕"
@@ -26,6 +27,11 @@ class Ross(Agent):
 @lru_cache(maxsize=1)
 def get_ross() -> Ross:
     """
-    Factory function to create a new instance of the Ross agent.
+    Return a cached Ross agent instance.
+
+    Returns
+    -------
+    Ross
+        Cached Ross agent.
     """
     return Ross()

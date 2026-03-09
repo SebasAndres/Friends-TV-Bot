@@ -3,6 +3,7 @@ from functools import lru_cache
 from src.agents import Agent
 
 class Phoebe(Agent):
+    """Phoebe Buffay character agent."""
 
     name = "Phoebe Buffay"
     emoji = "🎸"
@@ -29,6 +30,11 @@ class Phoebe(Agent):
 @lru_cache(maxsize=1)
 def get_phoebe() -> Phoebe:
     """
-    Factory function to create a new instance of the Phoebe agent.
+    Return a cached Phoebe agent instance.
+
+    Returns
+    -------
+    Phoebe
+        Cached Phoebe agent.
     """
     return Phoebe()

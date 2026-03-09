@@ -3,6 +3,7 @@ from functools import lru_cache
 from src.agents import Agent
 
 class Chandler(Agent):
+    """Chandler Bing character agent."""
 
     name = "Chandler Bing"
     emoji = "😏"
@@ -27,6 +28,11 @@ class Chandler(Agent):
 @lru_cache(maxsize=1)
 def get_chandler() -> Chandler:
     """
-    Factory function to create a new instance of the Chandler agent.
+    Return a cached Chandler agent instance.
+
+    Returns
+    -------
+    Chandler
+        Cached Chandler agent.
     """
     return Chandler()
