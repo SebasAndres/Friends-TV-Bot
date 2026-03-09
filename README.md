@@ -20,10 +20,34 @@ Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
 uv sync
 ```
 
-You also need a running LLM provider. By default the bot uses [Ollama](https://ollama.com/) with the `qwen2:1.5b` model:
+### Environment Variables
+
+Copy the example file and fill in your values:
+
+```bash
+cp .env.example .env
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GOOGLE_API_KEY` | Only for Gemini | Your [Google AI API key](https://aistudio.google.com/apikey). Not needed if using Ollama. |
+
+### LLM Provider
+
+The bot supports two providers, configured in `src/constants.py`:
+
+**Ollama (default)** — runs locally, no API key needed:
 
 ```bash
 ollama pull qwen2:1.5b
+```
+
+**Gemini** — requires a `GOOGLE_API_KEY` in your `.env`:
+
+```python
+# src/constants.py
+MODEL_PROVIDER = "gemini"
+MODEL = "gemini-2.0-flash"
 ```
 
 ## Usage
