@@ -19,9 +19,5 @@ if __name__ == '__main__':
             console.print("[dim]Exiting...[/dim]")
             break
         
-        if lower_input == '/help':
-            # show details of agents & models
-            ...
-
         response = agent.message(user_input)
         print_response(agent.name, agent.emoji, agent.color, response)

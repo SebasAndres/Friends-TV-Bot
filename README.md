@@ -7,34 +7,41 @@ A terminal chatbot where you talk to characters from the TV show Friends. Each c
 | Emoji | Character | Personality |
 |-------|-----------|-------------|
 | 🍕 | Joey Tribbiani | Food-loving, loyal, "How you doin'?" |
-| 👩‍🍳 | Monica Geller | Competitive, organized, amazing cook |
+| 🍳 | Monica Geller | Competitive, organized, amazing cook |
 | 🦕 | Ross Geller | Paleontologist, intellectual, "We were on a break!" |
 | 😏 | Chandler Bing | Sarcastic, "Could this BE any more..." |
 | 🎸 | Phoebe Buffay | Quirky, free-spirited, "Smelly Cat" musician |
 
-## Setup
+## Setup Guide
 
-Requires Python 3.12+ and [uv](https://docs.astral.sh/uv/).
+### 1. Prerequisites
+
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/)
+- An LLM provider ([Ollama](https://ollama.com/) or [Gemini](https://aistudio.google.com/))
+
+### 2. Install dependencies
 
 ```bash
 uv sync
 ```
 
-### Environment Variables
+### 3. Configure environment
 
-Copy the example file and fill in your values:
+Copy the example file and edit it:
 
 ```bash
 cp .env.example .env
 ```
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `GOOGLE_API_KEY` | Only for Gemini | Your [Google AI API key](https://aistudio.google.com/apikey). Not needed if using Ollama. |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MODEL_PROVIDER` | `ollama` | LLM provider to use: `ollama` or `gemini` |
+| `MODEL` | `qwen2:1.5b` | Model name (depends on the provider) |
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL (only for `ollama`) |
+| `GOOGLE_API_KEY` | — | [Google AI API key](https://aistudio.google.com/apikey) (only for `gemini`) |
 
-### LLM Provider
-
-The bot supports two providers, configured in `src/constants.py`:
+### 4. Set up your LLM provider
 
 **Ollama (default)** — runs locally, no API key needed:
 
@@ -42,12 +49,26 @@ The bot supports two providers, configured in `src/constants.py`:
 ollama pull qwen2:1.5b
 ```
 
-**Gemini** — requires a `GOOGLE_API_KEY` in your `.env`:
+**Gemini** — set these in your `.env`:
 
-```python
-# src/constants.py
-MODEL_PROVIDER = "gemini"
-MODEL = "gemini-2.0-flash"
+```
+MODEL_PROVIDER=gemini
+MODEL=gemini-2.0-flash
+GOOGLE_API_KEY=your-api-key-here
+```
+
+### 5. (Optional) Create a shell alias
+
+Add this to your `~/.bashrc` or `~/.zshrc` for quick access:
+
+```bash
+alias friends='cd ~/my/friends-bot && uv run python main.py'
+```
+
+Then reload your shell:
+
+```bash
+source ~/.bashrc
 ```
 
 ## Usage
@@ -63,6 +84,8 @@ A random character will greet you. Type your messages and chat with them. Type `
 ```
 main.py                          # Entry point
 src/
+  constants.py                   # Settings loaded from .env
+  display.py                     # Rich terminal UI
   agents/
     agent.py                     # Base Agent class
     agent_manager.py             # Random agent selection
@@ -76,5 +99,5 @@ src/
     model_facade.py              # LLM abstraction layer
     clients/
       ollama.py                  # Ollama client
-  display.py                     # Rich terminal UI
+      gemini.py                  # Gemini client
 ```
