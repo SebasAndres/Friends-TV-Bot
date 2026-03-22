@@ -39,10 +39,10 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MODEL_PROVIDER` | `ollama` | LLM provider to use: `ollama` or `gemini` |
+| `AI_CLIENT_PROVIDER` | `ollama` | LLM provider to use: `ollama` or `gemini` |
 | `MODEL` | `qwen2:1.5b` | Model name (depends on the provider) |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL (only for `ollama`) |
-| `EMBEDDING_PROVIDER` | `MODEL_PROVIDER` | Embedding backend: `ollama` or `gemini` |
+| `EMBEDDING_PROVIDER` | `AI_CLIENT_PROVIDER` | Embedding backend: `ollama` or `gemini` |
 | `EMBEDDING_MODEL` | provider default | Embedding model (e.g. `nomic-embed-text` or `text-embedding-004`) |
 | `GOOGLE_API_KEY` | — | [Google AI API key](https://aistudio.google.com/apikey) (only for `gemini`) |
 
@@ -58,7 +58,7 @@ ollama pull nomic-embed-text
 **Gemini** — set these in your `.env`:
 
 ```
-MODEL_PROVIDER=gemini
+AI_CLIENT_PROVIDER=gemini
 MODEL=gemini-2.0-flash
 EMBEDDING_PROVIDER=gemini
 EMBEDDING_MODEL=text-embedding-004
