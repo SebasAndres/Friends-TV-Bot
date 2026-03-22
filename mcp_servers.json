@@ -1,0 +1,6 @@
+{
+  "duckduckgo-search": {
+    "command": "npx",
+    "args": ["-y", "@oevortex/ddg_search@latest"]
+  }
+}
