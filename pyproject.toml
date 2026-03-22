@@ -13,4 +13,5 @@ dependencies = [
     "rich>=14.3.3",
     "torch>=2.10.0",
     "mcp>=1.0.0",
+    "prompt-toolkit>=3.0.0",
 ]

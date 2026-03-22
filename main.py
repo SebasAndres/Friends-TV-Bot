@@ -4,7 +4,16 @@ from src.agents.agent import Agent
 from src.agents.agent_manager import AgentManager
 from src.mcp import get_mcp_manager
 from src.skills import load_all_skills, SkillRegistry
-from src.display import console, print_response, thinking_spinner
+from src.display import (
+    console,
+    print_goodbye,
+    print_response,
+    print_user_message,
+    print_welcome,
+    prompt_input,
+    set_commands,
+    thinking_spinner,
+)
 
 
 def _logging_setup() -> None:
@@ -15,6 +24,7 @@ def _logging_setup() -> None:
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("mcp").setLevel(logging.CRITICAL)
 
 
 def main() -> None:
@@ -25,25 +35,27 @@ def main() -> None:
     skills = SkillRegistry(load_all_skills())
     agent: Agent = AgentManager.start_random_agent()
 
+    mcp_tools: list[str] | None = None
     if agent.mcp_manager:
-        tool_names = [t["name"] for t in agent.mcp_manager.get_tools()]
-        console.print(f"[dim]🔌 MCP tools: {', '.join(tool_names)}[/dim]")
+        mcp_tools = [t["name"] for t in agent.mcp_manager.get_tools()]
 
-    good_morning_msg = agent.get_start_message()
-    print_response(agent.name, agent.emoji, agent.color, good_morning_msg)
+    set_commands([(s.name, s.description) for s in skills.list_all()])
+
+    greeting = agent.get_start_message()
+    print_welcome(agent.name, agent.emoji, agent.color, greeting, mcp_tools)
 
     try:
         while True:
-
-            console.print()
-            user_input = console.input("[bold green]?>[/bold green] ").strip()
+            user_input = prompt_input(agent.emoji)
 
             if not user_input:
                 continue
 
             if user_input in ['q', '/exit', '/quit']:
-                console.print("[dim]Bye...[/dim]")
+                print_goodbye(agent.name, agent.emoji)
                 break
+
+            print_user_message(user_input)
 
             # Skill dispatch
             if user_input.startswith('/'):

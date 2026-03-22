@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from logging import getLogger
 
 from src.agents.character_loader import CharacterData
@@ -63,6 +64,7 @@ class Agent:
         """
 
         parts = [
+            f"Today's date is {date.today().isoformat()}.",
             f"You are the following character: \n{self.personality}",
         ]
         if self.rules:

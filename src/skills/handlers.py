@@ -36,7 +36,12 @@ def handle_load(agent: Agent, user_input: str) -> None:
         console.print("[yellow]Usage: /load <path-to-file>[/yellow]")
         return
 
-    file_path = Path(" ".join(parts[1:])).expanduser()
+    raw_path = " ".join(parts[1:]).strip().strip("'\"")
+    # Handle file:// URIs from drag-and-drop
+    if raw_path.startswith("file://"):
+        from urllib.parse import unquote, urlparse
+        raw_path = unquote(urlparse(raw_path).path)
+    file_path = Path(raw_path).expanduser()
     if not file_path.is_absolute():
         file_path = Path.cwd() / file_path
 
