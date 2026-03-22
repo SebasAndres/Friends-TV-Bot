@@ -1,0 +1,51 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+
+_SKILLS_DIR = Path(__file__).resolve().parent.parent.parent / "skills"
+
+
+@dataclass(frozen=True)
+class SkillData:
+    name: str
+    description: str
+    skill_type: str          # "handler" or "llm"
+    handler: str | None      # dotted path to callable (handler type only)
+    instructions: str        # body of the .md file
+
+
+def _parse_skill_file(path: Path) -> SkillData:
+    """Parse a skill markdown file with frontmatter."""
+    text = path.read_text(encoding="utf-8")
+
+    if not text.startswith("---"):
+        raise ValueError(f"Skill file {path.name} missing frontmatter")
+
+    _, frontmatter, body = text.split("---", 2)
+
+    meta: dict[str, str] = {}
+    for line in frontmatter.strip().splitlines():
+        key, _, value = line.partition(":")
+        value = value.strip().strip('"').strip("'")
+        meta[key.strip()] = value
+
+    required = ("name", "description", "type")
+    for field in required:
+        if field not in meta:
+            raise ValueError(f"Skill file {path.name} missing required field: {field}")
+
+    return SkillData(
+        name=meta["name"],
+        description=meta["description"],
+        skill_type=meta["type"],
+        handler=meta.get("handler"),
+        instructions=body.strip(),
+    )
+
+
+def load_all_skills() -> list[SkillData]:
+    """Discover and load all .md skill files from the skills directory."""
+    if not _SKILLS_DIR.exists():
+        return []
+    return [_parse_skill_file(p) for p in sorted(_SKILLS_DIR.glob("*.md"))]
