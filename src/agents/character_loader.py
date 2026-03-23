@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-_CHARACTERS_DIR = Path(__file__).resolve().parent.parent.parent / "agents"
+_DEFAULT_DIR = Path(__file__).resolve().parent.parent.parent / "agents"
 
 
 @dataclass(frozen=True)
@@ -52,29 +52,38 @@ def _parse_character_file(path: Path) -> CharacterData:
     )
 
 
-def load_all_characters() -> list[CharacterData]:
-    """Discover and load all .md character files from the characters directory."""
-    return [
-        _parse_character_file(path)
-        for path in sorted(_CHARACTERS_DIR.glob("*.md"))
-    ]
+def _collect_files(dirs: list[Path] | None = None) -> list[Path]:
+    """Collect .md files from given dirs, deduplicating by filename (first wins)."""
+    search_dirs = dirs if dirs else [_DEFAULT_DIR]
+    seen: dict[str, Path] = {}
+    for d in search_dirs:
+        if d.is_dir():
+            for p in sorted(d.glob("*.md")):
+                if p.name not in seen:
+                    seen[p.name] = p
+    return sorted(seen.values(), key=lambda p: p.name)
 
 
-def load_character_by_filename(filename: str) -> CharacterData:
+def load_all_characters(dirs: list[Path] | None = None) -> list[CharacterData]:
+    """Discover and load all .md character files from the given directories."""
+    return [_parse_character_file(p) for p in _collect_files(dirs)]
+
+
+def load_character_by_filename(filename: str, dirs: list[Path] | None = None) -> CharacterData:
     """Load a specific character by its .md filename (without extension)."""
-    path = _CHARACTERS_DIR / f"{filename}.md"
-    if not path.exists():
-        available = [p.stem for p in sorted(_CHARACTERS_DIR.glob("*.md"))]
-        raise FileNotFoundError(
-            f"Character '{filename}' not found. Available: {', '.join(available)}"
-        )
-    return _parse_character_file(path)
+    for p in _collect_files(dirs):
+        if p.stem == filename:
+            return _parse_character_file(p)
+    available = [p.stem for p in _collect_files(dirs)]
+    raise FileNotFoundError(
+        f"Character '{filename}' not found. Available: {', '.join(available)}"
+    )
 
 
-def load_random_character() -> CharacterData:
+def load_random_character(dirs: list[Path] | None = None) -> CharacterData:
     """Pick a random .md file and parse only that one."""
     import random
-    paths = list(_CHARACTERS_DIR.glob("*.md"))
+    paths = _collect_files(dirs)
     if not paths:
-        raise FileNotFoundError(f"No character .md files found in {_CHARACTERS_DIR}")
+        raise FileNotFoundError("No character .md files found")
     return _parse_character_file(random.choice(paths))

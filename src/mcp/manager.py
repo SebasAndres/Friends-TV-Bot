@@ -7,13 +7,12 @@ import json
 import os
 import threading
 from contextlib import AsyncExitStack
-from functools import lru_cache
 from logging import getLogger
 from pathlib import Path
 
 logger = getLogger(__name__)
 
-_MCP_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "mcp_servers.json"
+_DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent.parent.parent / "mcp_servers.json"
 
 
 class MCPManager:
@@ -233,23 +232,42 @@ class MCPManager:
         return "\n".join(texts) if texts else str(result.content)
 
 
-@lru_cache(maxsize=1)
-def get_mcp_manager() -> MCPManager | None:
-    """Return a cached MCPManager singleton, or None if unavailable."""
-    if not _MCP_CONFIG_PATH.exists():
+_singleton: MCPManager | None = None
+_singleton_initialized = False
+
+
+def get_mcp_manager(config_paths: list[Path] | None = None) -> MCPManager | None:
+    """Return an MCPManager singleton, or None if unavailable.
+
+    On first call, connects to all MCP servers found in *config_paths*.
+    Subsequent calls return the cached instance (ignoring config_paths).
+    Pass config_paths=[] to force using the legacy default.
+    """
+    global _singleton, _singleton_initialized
+    if _singleton_initialized:
+        return _singleton
+
+    paths = config_paths if config_paths is not None else []
+    if not paths and _DEFAULT_CONFIG_PATH.exists():
+        paths = [_DEFAULT_CONFIG_PATH]
+
+    if not paths:
+        _singleton_initialized = True
         return None
 
     try:
         manager = MCPManager()
-        manager.connect(str(_MCP_CONFIG_PATH))
+        for p in paths:
+            manager.connect(str(p))
 
         if manager.get_tools():
             tool_names = [t["name"] for t in manager.get_tools()]
             logger.info("MCP tools available: %s", ", ".join(tool_names))
-            return manager
-
-        manager.close()
-        return None
+            _singleton = manager
+        else:
+            manager.close()
     except Exception as exc:
         logger.warning("MCP initialization failed: %s", exc)
-        return None
+
+    _singleton_initialized = True
+    return _singleton

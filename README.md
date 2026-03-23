@@ -2,27 +2,21 @@
 
 A natural-language OS that runs as a background loop, executing commands through conversation. Search the web, run code, manage files, answer messages, create calendar events, and more — all through natural language, powered by LLM agents with configurable personalities.
 
-## Characters
+## Setup
 
-Agents respond through configurable character personalities defined as markdown files in `agents/`. Some examples are included out of the box.
-
-## Setup Guide
-
-### 1. Prerequisites
+### Prerequisites
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)
 - An LLM provider ([Ollama](https://ollama.com/), [Gemini](https://aistudio.google.com/), or [OpenRouter](https://openrouter.ai/))
 
-### 2. Install dependencies
+### Install
 
 ```bash
 uv sync
 ```
 
-### 3. Configure environment
-
-Copy the example file and edit it:
+### Configure environment
 
 ```bash
 cp .env.example .env
@@ -38,51 +32,80 @@ cp .env.example .env
 | `GOOGLE_API_KEY` | — | [Google AI API key](https://aistudio.google.com/apikey) (only for `gemini`) |
 | `OPENROUTER_API_KEY` | — | [OpenRouter API key](https://openrouter.ai/) (only for `openrouter`) |
 
-### 4. Set up your LLM provider
-
-**Ollama (default)** — runs locally, no API key needed:
-
-```bash
-ollama pull qwen2:1.5b
-ollama pull nomic-embed-text
-```
-
-**Gemini** — set these in your `.env`:
-
-```
-AI_CLIENT_PROVIDER=gemini
-MODEL=gemini-2.0-flash
-EMBEDDING_PROVIDER=gemini
-EMBEDDING_MODEL=text-embedding-004
-GOOGLE_API_KEY=your-api-key-here
-```
-
-### 5. (Optional) Create a shell alias
-
-Add this to your `~/.bashrc` or `~/.zshrc` for quick access:
-
-```bash
-alias qubito='cd ~/my/qubito && uv run python main.py'
-```
-
-Then reload your shell:
-
-```bash
-source ~/.bashrc
-```
-
 ## Usage
 
 ```bash
-uv run python main.py
+qubito chat       # Interactive terminal chat
+qubito init       # Scaffold ~/.qubito/ and .qubito/ directories
+qubito telegram   # Run the Telegram bot
 ```
 
-A random character will greet you. Type your messages and chat with them. Type `q`, `/exit`, or `/quit` to leave.
+Or via `uv run`:
 
-Commands:
+```bash
+uv run qubito chat
+```
+
+A random character will greet you. Type your messages and chat naturally. Type `q`, `/exit`, or `/quit` to leave.
+
+### Commands
+
 - `/load <path>` — index a local text file for retrieval context
 - `/context` or `/ctx` — inspect currently indexed chunks
 - `/history` — print chat history
 - `/lineup` — show available characters
 - `/summarize` — summarize the conversation so far
 - `/help` — list available commands
+
+## Configuration structure
+
+Qubito uses a two-tier config system. Project-local settings override global ones.
+
+```
+~/.qubito/              # Global (user defaults)
+├── agents/             # Character personality files (.md)
+├── skills/             # Slash commands and routines (.md)
+├── rules/              # Behavioral rules injected into system prompt (.md)
+├── mcp/                # MCP server configs (servers.json)
+└── memory/             # Persistent memory across sessions
+
+.qubito/                # Project-local (overrides global by filename)
+├── agents/
+├── skills/
+├── rules/
+├── mcp/
+└── memory/
+```
+
+Run `qubito init` to scaffold both directories, or `qubito init --global-only` for just `~/.qubito/`.
+
+## Characters
+
+Agents respond through configurable character personalities defined as markdown files with YAML frontmatter. Drop a `.md` file into `agents/` (or `~/.qubito/agents/`) and it's instantly available.
+
+Example character file:
+
+```markdown
+---
+name: My Character
+emoji: "🤖"
+color: bold green
+hi_message: "Hey there!"
+bye_message: "See you later!"
+---
+
+You are a helpful assistant who speaks in a friendly tone.
+```
+
+Some example characters are included out of the box.
+
+## Architecture
+
+- **CLI** (`src/cli/`) — argparse-based entry point with `chat`, `init`, `telegram` subcommands
+- **Config** (`src/config/`) — two-tier path resolver (`~/.qubito/` + `.qubito/`) with legacy fallback
+- **Agents** (`src/agents/`) — `Agent` base class orchestrating AI model, RAG store, and MCP tools per character
+- **AI providers** (`src/genai/`) — pluggable backends: Ollama, Gemini, OpenRouter
+- **RAG** (`src/rag/`) — FAISS-based document store with chunking and similarity search
+- **MCP** (`src/mcp/`) — sync wrapper around async MCP protocol for tool integration
+- **Skills** (`src/skills/`) — declarative slash commands loaded from markdown files
+- **Rules** (`src/rules/`) — behavioral constraints injected into the system prompt

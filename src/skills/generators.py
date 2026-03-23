@@ -18,6 +18,32 @@ _AGENTS_DIR = _PROJECT_ROOT / "agents"
 _SKILLS_DIR = _PROJECT_ROOT / "skills"
 _RULES_DIR = _PROJECT_ROOT / "rules"
 
+# Module-level config set by the CLI at startup; generators use these paths
+# when available, falling back to the legacy project-root directories.
+_config_agents_dir: Path | None = None
+_config_skills_dir: Path | None = None
+_config_rules_dir: Path | None = None
+
+
+def set_output_dirs(agents: Path | None = None, skills: Path | None = None, rules: Path | None = None) -> None:
+    """Configure where generators write new files."""
+    global _config_agents_dir, _config_skills_dir, _config_rules_dir
+    _config_agents_dir = agents
+    _config_skills_dir = skills
+    _config_rules_dir = rules
+
+
+def _agents_dir() -> Path:
+    return _config_agents_dir or _AGENTS_DIR
+
+
+def _skills_dir() -> Path:
+    return _config_skills_dir or _SKILLS_DIR
+
+
+def _rules_dir() -> Path:
+    return _config_rules_dir or _RULES_DIR
+
 
 def _prompt(label: str, default: str = "") -> str:
     """Prompt the user for input with an optional default."""
@@ -51,7 +77,9 @@ def handle_new_agent(agent: Agent, user_input: str) -> None:
         return
 
     filename = name.lower().replace(" ", "-") + ".md"
-    filepath = _AGENTS_DIR / filename
+    target = _agents_dir()
+    target.mkdir(parents=True, exist_ok=True)
+    filepath = target / filename
 
     if filepath.exists():
         console.print(f"[red]Agent file already exists:[/red] {filepath}")
@@ -69,7 +97,7 @@ def handle_new_agent(agent: Agent, user_input: str) -> None:
     )
 
     filepath.write_text(content, encoding="utf-8")
-    console.print(f"\n[green]Created agent:[/green] {filepath.relative_to(_PROJECT_ROOT)}")
+    console.print(f"\n[green]Created agent:[/green] {filepath}")
 
 
 def handle_new_skill(agent: Agent, user_input: str) -> None:
@@ -105,7 +133,9 @@ def handle_new_skill(agent: Agent, user_input: str) -> None:
         body_lines.append(line)
 
     filename = name.lower().replace(" ", "-") + ".md"
-    filepath = _SKILLS_DIR / filename
+    target = _skills_dir()
+    target.mkdir(parents=True, exist_ok=True)
+    filepath = target / filename
 
     if filepath.exists():
         console.print(f"[red]Skill file already exists:[/red] {filepath}")
@@ -123,7 +153,7 @@ def handle_new_skill(agent: Agent, user_input: str) -> None:
     )
 
     filepath.write_text(content, encoding="utf-8")
-    console.print(f"\n[green]Created skill:[/green] {filepath.relative_to(_PROJECT_ROOT)}")
+    console.print(f"\n[green]Created skill:[/green] {filepath}")
 
 
 def handle_new_rule(agent: Agent, user_input: str) -> None:
@@ -150,7 +180,9 @@ def handle_new_rule(agent: Agent, user_input: str) -> None:
         return
 
     filename = name.lower().replace(" ", "-") + ".md"
-    filepath = _RULES_DIR / filename
+    target = _rules_dir()
+    target.mkdir(parents=True, exist_ok=True)
+    filepath = target / filename
 
     if filepath.exists():
         console.print(f"[red]Rule file already exists:[/red] {filepath}")
@@ -166,4 +198,4 @@ def handle_new_rule(agent: Agent, user_input: str) -> None:
     )
 
     filepath.write_text(content, encoding="utf-8")
-    console.print(f"\n[green]Created rule:[/green] {filepath.relative_to(_PROJECT_ROOT)}")
+    console.print(f"\n[green]Created rule:[/green] {filepath}")

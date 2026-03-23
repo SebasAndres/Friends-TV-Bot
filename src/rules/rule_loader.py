@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-_RULES_DIR = Path(__file__).resolve().parent.parent.parent / "rules"
+_DEFAULT_DIR = Path(__file__).resolve().parent.parent.parent / "rules"
 
 
 @dataclass(frozen=True)
@@ -34,11 +34,16 @@ def _parse_rule_file(path: Path) -> RuleData:
     )
 
 
-def load_all_rules() -> str:
+def load_all_rules(dirs: list[Path] | None = None) -> str:
     """Load all rule .md files, sorted by priority, and return concatenated text."""
-    if not _RULES_DIR.exists():
-        return ""
+    search_dirs = dirs if dirs else [_DEFAULT_DIR]
+    seen: dict[str, Path] = {}
+    for d in search_dirs:
+        if d.is_dir():
+            for p in d.glob("*.md"):
+                if p.name not in seen:
+                    seen[p.name] = p
 
-    rules = [_parse_rule_file(p) for p in _RULES_DIR.glob("*.md")]
+    rules = [_parse_rule_file(p) for p in seen.values()]
     rules.sort(key=lambda r: r.priority)
     return "\n\n".join(r.content for r in rules)

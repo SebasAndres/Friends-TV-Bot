@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-_SKILLS_DIR = Path(__file__).resolve().parent.parent.parent / "skills"
+_DEFAULT_DIR = Path(__file__).resolve().parent.parent.parent / "skills"
 
 
 @dataclass(frozen=True)
@@ -44,8 +44,13 @@ def _parse_skill_file(path: Path) -> SkillData:
     )
 
 
-def load_all_skills() -> list[SkillData]:
-    """Discover and load all .md skill files from the skills directory."""
-    if not _SKILLS_DIR.exists():
-        return []
-    return [_parse_skill_file(p) for p in sorted(_SKILLS_DIR.glob("*.md"))]
+def load_all_skills(dirs: list[Path] | None = None) -> list[SkillData]:
+    """Discover and load all .md skill files from the given directories."""
+    search_dirs = dirs if dirs else [_DEFAULT_DIR]
+    seen: dict[str, Path] = {}
+    for d in search_dirs:
+        if d.is_dir():
+            for p in sorted(d.glob("*.md")):
+                if p.name not in seen:
+                    seen[p.name] = p
+    return [_parse_skill_file(p) for p in sorted(seen.values(), key=lambda p: p.name)]

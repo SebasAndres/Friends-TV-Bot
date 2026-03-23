@@ -19,11 +19,13 @@ logger = getLogger(__name__)
 
 class Agent:
 
-    def __init__(self, character: CharacterData, rules: str = "") -> None:
-        """
-        Initialize an agent with chat model, document store, and MCP tools.
-        """
-
+    def __init__(
+        self,
+        character: CharacterData,
+        rules: str = "",
+        mcp_config_paths: list[object] | None = None,
+    ) -> None:
+        """Initialize an agent with chat model, document store, and MCP tools."""
         self.name = character.name
         self.emoji = character.emoji
         self.color = character.color
@@ -41,7 +43,7 @@ class Agent:
         )
         self.response_times: list[float] = []
         self.on_tool_call = self._default_on_tool_call
-        self.mcp_manager = get_mcp_manager()
+        self.mcp_manager = get_mcp_manager(config_paths=mcp_config_paths)
         self.ai_model = AIModelFacade(
             provider=AI_CLIENT_PROVIDER,
             model=AI_CLIENT_MODEL,
