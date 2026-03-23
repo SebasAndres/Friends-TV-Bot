@@ -32,6 +32,8 @@ class MCPManager:
         self._sessions: dict[str, object] = {}
         self._tools: list[dict] = []
         self._tool_server_map: dict[str, str] = {}
+        self._lazy_configs: dict[str, dict] = {}
+        self._lazy_connected: set[str] = set()
 
     # ------------------------------------------------------------------
     # Public (sync) API
@@ -81,21 +83,86 @@ class MCPManager:
             config: dict = json.load(fh)
 
         for server_name, server_cfg in config.items():
+            is_lazy = server_cfg.get("lazy", False)
             try:
-                await self._connect_one(
-                    server_name, server_cfg, ClientSession, StdioServerParameters, stdio_client,
-                )
+                if is_lazy:
+                    await self._discover_lazy(
+                        server_name, server_cfg, ClientSession, StdioServerParameters, stdio_client,
+                    )
+                else:
+                    await self._connect_one(
+                        server_name, server_cfg, ClientSession, StdioServerParameters, stdio_client,
+                    )
             except Exception as exc:
                 logger.warning("MCP server '%s' failed to connect: %s", server_name, exc)
 
-    async def _connect_one(self, name, cfg, ClientSession, StdioServerParameters, stdio_client):
-        resolved_env: dict[str, str] = {}
+    async def _discover_lazy(
+        self, name: str, cfg: dict, ClientSession: type, StdioServerParameters: type, stdio_client: object,
+    ) -> None:
+        """Connect to a lazy server to discover its tools, then disconnect."""
+        temp_stack = AsyncExitStack()
+        await temp_stack.__aenter__()
+
+        resolved_env = self._resolve_env(cfg)
+        params = StdioServerParameters(
+            command=cfg["command"],
+            args=cfg.get("args", []),
+            env={**os.environ, **resolved_env},
+        )
+
+        devnull = open(os.devnull, "w")
+        read_stream, write_stream = await temp_stack.enter_async_context(
+            stdio_client(params, errlog=devnull)
+        )
+        session = await temp_stack.enter_async_context(
+            ClientSession(read_stream, write_stream)
+        )
+        await session.initialize()
+
+        tools_result = await session.list_tools()
+        for tool in tools_result.tools:
+            self._tools.append({
+                "name": tool.name,
+                "description": tool.description or "",
+                "input_schema": tool.inputSchema,
+            })
+            self._tool_server_map[tool.name] = name
+
+        await temp_stack.aclose()
+
+        self._lazy_configs[name] = cfg
+        logger.info(
+            "MCP server '%s' (lazy): %d tool(s) discovered", name, len(tools_result.tools),
+        )
+
+    async def _ensure_lazy_connected(self, server_name: str) -> None:
+        """Connect a lazy server on-demand if not already connected."""
+        if server_name in self._lazy_connected:
+            return
+
+        from mcp import ClientSession
+        from mcp.client.stdio import StdioServerParameters, stdio_client
+
+        cfg = self._lazy_configs[server_name]
+        await self._connect_one(
+            server_name, cfg, ClientSession, StdioServerParameters, stdio_client,
+        )
+        self._lazy_connected.add(server_name)
+        logger.info("MCP server '%s' (lazy): connected on demand", server_name)
+
+    @staticmethod
+    def _resolve_env(cfg: dict) -> dict[str, str]:
+        """Resolve environment variable references in server config."""
+        resolved: dict[str, str] = {}
         for k, v in cfg.get("env", {}).items():
             if isinstance(v, str) and v.startswith("${") and v.endswith("}"):
-                resolved_env[k] = os.environ.get(v[2:-1], "")
+                resolved[k] = os.environ.get(v[2:-1], "")
             else:
-                resolved_env[k] = str(v)
+                resolved[k] = str(v)
+        return resolved
 
+    async def _connect_one(self, name, cfg, ClientSession, StdioServerParameters, stdio_client):
+        resolved_env = self._resolve_env(cfg)
         params = StdioServerParameters(
             command=cfg["command"],
             args=cfg.get("args", []),
@@ -113,24 +180,49 @@ class MCPManager:
 
         self._sessions[name] = session
 
-        tools_result = await session.list_tools()
-        for tool in tools_result.tools:
-            self._tools.append({
-                "name": tool.name,
-                "description": tool.description or "",
-                "input_schema": tool.inputSchema,
-            })
-            self._tool_server_map[tool.name] = name
+        # Skip tool registration if already discovered (lazy reconnect)
+        if name not in self._lazy_configs:
+            tools_result = await session.list_tools()
+            for tool in tools_result.tools:
+                self._tools.append({
+                    "name": tool.name,
+                    "description": tool.description or "",
+                    "input_schema": tool.inputSchema,
+                })
+                self._tool_server_map[tool.name] = name
 
         logger.info(
-            "MCP server '%s': %d tool(s) registered", name, len(tools_result.tools),
+            "MCP server '%s': connected", name,
         )
 
     async def _call_tool_async(self, name: str, arguments: dict) -> str:
         server_name = self._tool_server_map.get(name)
-        if not server_name or server_name not in self._sessions:
+        if not server_name:
             return f"Error: tool '{name}' not available"
 
+        # Lazy server: connect on first tool call
+        if server_name in self._lazy_configs and server_name not in self._lazy_connected:
+            await self._ensure_lazy_connected(server_name)
+
+        if server_name not in self._sessions:
+            return f"Error: tool '{name}' not available"
+
+        try:
+            return await self._execute_tool_call(server_name, name, arguments)
+        except Exception:
+            # Session may be stale — reconnect and retry once
+            if server_name in self._lazy_configs:
+                logger.info("MCP server '%s': session broken, reconnecting", server_name)
+                self._lazy_connected.discard(server_name)
+                self._sessions.pop(server_name, None)
+                try:
+                    await self._ensure_lazy_connected(server_name)
+                    return await self._execute_tool_call(server_name, name, arguments)
+                except Exception as exc:
+                    return f"Error: tool '{name}' failed after reconnect: {exc}"
+            return f"Error: tool '{name}' call failed"
+
+    async def _execute_tool_call(self, server_name: str, name: str, arguments: dict) -> str:
         session = self._sessions[server_name]
         result = await session.call_tool(name, arguments)
 

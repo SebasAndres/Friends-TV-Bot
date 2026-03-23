@@ -14,6 +14,7 @@ from src.display import console, print_response
 from src.constants import (
     AI_CLIENT_MODEL,
     AI_CLIENT_PROVIDER,
+    CONTEXT_WINDOW,
     EMBEDDING_MODEL,
     EMBEDDING_PROVIDER,
 )
@@ -138,6 +139,48 @@ def handle_stats(agent: Agent, user_input: str) -> None:
                   f"[dim]avg[/dim] [cyan]{avg:.1f}s[/cyan]  "
                   f"[dim]max[/dim] [cyan]{max_t:.1f}s[/cyan]")
     console.print()
+
+
+def handle_context_usage(agent: Agent, user_input: str) -> None:
+    """Display current context usage in tokens and percentage."""
+    history = agent.get_history()
+    total_chars = sum(len(msg.get("content", "")) for msg in history)
+    estimated_tokens = total_chars // 4
+
+    context_limit = CONTEXT_WINDOW
+    usage_pct = (estimated_tokens / context_limit) * 100
+
+    bar_width = 30
+    filled = int((usage_pct / 100) * bar_width)
+    bar = "█" * filled + "░" * (bar_width - filled)
+
+    color = "green" if usage_pct < 50 else "yellow" if usage_pct < 80 else "red"
+
+    console.print()
+    console.print(f"  [bold]Context usage[/bold]  ({len(history)} messages)")
+    console.print()
+    console.print(f"  [{color}]{bar}[/{color}] {usage_pct:.1f}%")
+    console.print(f"  [dim]~{estimated_tokens:,} / {context_limit:,} tokens (estimated)[/dim]")
+    console.print()
+
+
+def handle_model(agent: Agent, user_input: str) -> None:
+    """Switch the active chat model at runtime."""
+    try:
+        parts = shlex.split(user_input)
+    except ValueError:
+        console.print("[red]Invalid format. Use: /model <model-name>[/red]")
+        return
+
+    if len(parts) < 2:
+        console.print(f"  [bold]Current model:[/bold] {agent.ai_model.model}")
+        console.print("  [dim]Usage: /model <model-name>[/dim]")
+        return
+
+    new_model = parts[1]
+    old_model = agent.ai_model.model
+    agent.ai_model.model = new_model
+    console.print(f"  Model changed: [red]{old_model}[/red] → [green]{new_model}[/green]")
 
 
 def handle_help(agent: Agent, user_input: str) -> None:

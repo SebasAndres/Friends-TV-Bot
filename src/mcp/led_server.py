@@ -1,9 +1,14 @@
 """MCP server that exposes LED strip control as tools for the LLM."""
 
+import subprocess
+import time
+from pathlib import Path
+
 import httpx
 from mcp.server.fastmcp import FastMCP
 
 LED_API_BASE = "http://localhost:8000"
+BLE_RESET_SCRIPT = Path(__file__).resolve().parent.parent.parent.parent / "home-led-remote" / "scripts" / "ble-reset.sh"
 
 # Note: this LED strip renders red weak, so colors are compensated
 # with extra red to match the intended appearance.
@@ -50,7 +55,7 @@ MOODS: dict[str, dict] = {
     },
     "music": {
         "description": "Audio-reactive mode — LEDs dance to the music",
-        "audio": True,
+        "audio": {"r": 255, "g": 255, "b": 255},
     },
 }
 
@@ -60,11 +65,13 @@ mcp = FastMCP("led-control")
 def _api(method: str, endpoint: str, **kwargs: dict) -> str:
     """Make an HTTP request to the LED API."""
     try:
-        resp = httpx.request(method, f"{LED_API_BASE}{endpoint}", **kwargs)
+        resp = httpx.request(method, f"{LED_API_BASE}{endpoint}", timeout=5.0, **kwargs)
         resp.raise_for_status()
         return resp.text
     except httpx.ConnectError:
         return "Error: LED API is not reachable. Is the server running?"
+    except httpx.TimeoutException:
+        return "Error: LED API request timed out."
     except httpx.HTTPStatusError as e:
         return f"Error: {e.response.status_code} - {e.response.text}"
 
@@ -101,7 +108,7 @@ def set_room_mood(mood: str) -> str:
     _api("POST", "/on")
 
     if cfg.get("audio"):
-        results.append(_api("POST", "/audio/start"))
+        results.append(_api("POST", "/audio/start", json=cfg["audio"]))
     else:
         if "brightness" in cfg:
             results.append(_api("POST", "/brightness", json={"percent": cfg["brightness"]}))
@@ -140,12 +147,73 @@ def set_led_color(r: int, g: int, b: int, brightness: int = 80) -> str:
 
 
 @mcp.tool()
+def set_brightness(percent: int) -> str:
+    """Set the LED strip brightness without changing the current color or effect.
+
+    Use this when the user asks to dim or brighten the lights, lower or raise
+    the brightness, or make the lights softer/stronger.
+
+    Args:
+        percent: Brightness percentage (0-100). 0 is nearly off, 100 is max.
+    """
+    percent = max(0, min(100, percent))
+    result = _api("POST", "/brightness", json={"percent": percent})
+    if "Error" in result:
+        return result
+    return f"Brightness set to {percent}%"
+
+
+@mcp.tool()
+def stop_audio_mode() -> str:
+    """Stop the audio-reactive LED mode.
+
+    Use this when the user wants to stop the lights from reacting to music
+    without turning them off. The lights will stay on at their last state.
+    """
+    result = _api("POST", "/audio/stop")
+    if "Error" in result:
+        return result
+    return "Audio-reactive mode stopped. Lights remain on."
+
+
+@mcp.tool()
 def turn_off_lights() -> str:
-    """Turn off the LED strip."""
+    """Turn off the LED strip completely (also stops audio mode if active)."""
+    _api("POST", "/audio/stop")
     result = _api("POST", "/off")
     if "Error" in result:
         return result
     return "Lights turned off"
+
+
+@mcp.tool()
+def restart_ble_connection() -> str:
+    """Reset the Bluetooth connection to the LED strip and verify it recovers.
+
+    Use this ONLY after other LED tools have failed multiple times in a row.
+    It power-cycles the Bluetooth adapter and re-scans for the device,
+    then waits a few seconds and checks the health endpoint.
+    """
+    if not BLE_RESET_SCRIPT.exists():
+        return f"Error: BLE reset script not found at {BLE_RESET_SCRIPT}"
+
+    try:
+        result = subprocess.run(
+            ["bash", str(BLE_RESET_SCRIPT)],
+            capture_output=True, text=True, timeout=30,
+        )
+        if result.returncode != 0:
+            return f"BLE reset failed: {result.stderr or result.stdout}"
+    except subprocess.TimeoutExpired:
+        return "Error: BLE reset script timed out after 30s"
+
+    # Give the LED API time to reconnect
+    time.sleep(3)
+
+    health = _api("GET", "/health")
+    if "Error" in health:
+        return f"BLE reset ran but LED API is still unreachable: {health}"
+    return f"BLE connection reset successful. Health: {health}"
 
 
 if __name__ == "__main__":
