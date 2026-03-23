@@ -1,19 +1,10 @@
-# Friends TV Show Bot
-![](https://media.giphy.com/media/v1.Y2lkPWVjZjA1ZTQ3aW52dmg0M3prdjhxODVnaGxncjZ5aG81dXl3OTl3N2xyNjN4bWg0MyZlcD12MV9naWZzX3NlYXJjaCZjdD1n/Rhf0uSWt1P2TFqVMZK/giphy.gif)
+# Qubito
 
-A terminal chatbot where you talk to characters from the TV show Friends. Each character has their own personality, catchphrases, and style.
-<img width="1908" height="662" alt="image" src="https://github.com/user-attachments/assets/a3a85586-0864-4c07-bdb2-8eb68ea73782" />
-
+A natural-language OS that runs as a background loop, executing commands through conversation. Search the web, run code, manage files, answer messages, create calendar events, and more — all through natural language, powered by LLM agents with configurable personalities.
 
 ## Characters
 
-| Emoji | Character | Personality |
-|-------|-----------|-------------|
-| 🍕 | Joey Tribbiani | Food-loving, loyal, "How you doin'?" |
-| 🍳 | Monica Geller | Competitive, organized, amazing cook |
-| 🦕 | Ross Geller | Paleontologist, intellectual, "We were on a break!" |
-| 😏 | Chandler Bing | Sarcastic, "Could this BE any more..." |
-| 🎸 | Phoebe Buffay | Quirky, free-spirited, "Smelly Cat" musician |
+Agents respond through configurable character personalities defined as markdown files in `agents/`. Some examples are included out of the box.
 
 ## Setup Guide
 
@@ -71,7 +62,7 @@ GOOGLE_API_KEY=your-api-key-here
 Add this to your `~/.bashrc` or `~/.zshrc` for quick access:
 
 ```bash
-alias friends='cd ~/my/friends-bot && uv run python main.py'
+alias qubito='cd ~/my/qubito && uv run python main.py'
 ```
 
 Then reload your shell:
