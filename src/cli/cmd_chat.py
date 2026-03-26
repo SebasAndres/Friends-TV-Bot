@@ -17,7 +17,12 @@ from src.display import (
 )
 
 if TYPE_CHECKING:
+    from src.agents.agent import Agent
     from src.config.resolver import QConfig
+    from src.daemon.client import DaemonClient
+    from src.skills import SkillRegistry
+
+_EXIT_COMMANDS = {"q", "/exit", "/quit"}
 
 
 def run_chat(config: QConfig) -> None:
@@ -29,33 +34,29 @@ def run_chat(config: QConfig) -> None:
 
     client = DaemonClient()
     if client.is_daemon_running():
-        _run_chat_via_daemon(config, client)
+        _run_chat_via_daemon(client)
     else:
         client.close()
         _run_chat_in_process(config)
 
 
-def _run_chat_via_daemon(config: QConfig, client: "DaemonClient") -> None:
+def _run_chat_via_daemon(client: DaemonClient) -> None:
     """Chat loop that delegates to the daemon HTTP API."""
-    from src.daemon.client import DaemonClient
-
     session = client.create_session()
-    set_commands([])
-
-    print_welcome(
-        session.character_name,
-        session.emoji,
-        session.color,
-        session.hi_message,
-        tools=None,
-    )
-
     try:
+        set_commands([])
+        print_welcome(
+            session.character_name,
+            session.emoji,
+            session.color,
+            session.hi_message,
+        )
+
         while True:
             user_input = prompt_input(session.emoji)
             if not user_input:
                 continue
-            if user_input in ["q", "/exit", "/quit"]:
+            if user_input in _EXIT_COMMANDS:
                 print_goodbye(session.character_name, session.emoji, "has left the chat.")
                 break
 
@@ -70,8 +71,7 @@ def _run_chat_via_daemon(config: QConfig, client: "DaemonClient") -> None:
 
 
 def _run_chat_in_process(config: QConfig) -> None:
-    """Original in-process chat loop (no daemon)."""
-    from src.agents.agent import Agent
+    """In-process chat loop (no daemon)."""
     from src.agents.agent_manager import AgentManager
     from src.mcp import get_mcp_manager
     from src.skills import SkillRegistry, load_all_skills
@@ -85,16 +85,14 @@ def _run_chat_in_process(config: QConfig) -> None:
         )
 
     skills = SkillRegistry(load_all_skills(dirs=config.skills_dirs))
-    agent: Agent = AgentManager.start_agent(config=config)
+    agent = AgentManager.start_agent(config=config)
 
     mcp_tools: list[str] | None = None
     if agent.mcp_manager:
         mcp_tools = [t["name"] for t in agent.mcp_manager.get_tools()]
 
     set_commands([(s.name, s.description) for s in skills.list_all()])
-
-    greeting = agent.get_start_message()
-    print_welcome(agent.name, agent.emoji, agent.color, greeting, mcp_tools)
+    print_welcome(agent.name, agent.emoji, agent.color, agent.get_start_message(), mcp_tools)
 
     try:
         _in_process_loop(agent, skills)
@@ -104,23 +102,20 @@ def _run_chat_in_process(config: QConfig) -> None:
             mcp.close()
 
 
-def _in_process_loop(agent: "Agent", skills: "SkillRegistry") -> None:
-    """The main read-eval-print loop for in-process mode."""
-    from src.agents.agent import Agent
-
+def _in_process_loop(agent: Agent, skills: SkillRegistry) -> None:
+    """Read-eval-print loop for in-process mode."""
     while True:
         user_input = prompt_input(agent.emoji)
         if not user_input:
             continue
-        if user_input in ["q", "/exit", "/quit"]:
+        if user_input in _EXIT_COMMANDS:
             print_goodbye(agent.name, agent.emoji, agent.bye_message)
             break
 
         print_user_message(user_input)
 
-        if user_input.startswith("/"):
-            if _handle_skill(agent, skills, user_input):
-                continue
+        if user_input.startswith("/") and _handle_skill(agent, skills, user_input):
+            continue
 
         t0 = time.monotonic()
         with thinking_spinner():
@@ -130,7 +125,7 @@ def _in_process_loop(agent: "Agent", skills: "SkillRegistry") -> None:
         print_response(agent.name, agent.emoji, agent.color, response, elapsed)
 
 
-def _handle_skill(agent: "Agent", skills: "SkillRegistry", user_input: str) -> bool:
+def _handle_skill(agent: Agent, skills: SkillRegistry, user_input: str) -> bool:
     """Dispatch a slash command. Returns True if handled."""
     command = user_input.split()[0].lstrip("/")
     if command == "ctx":
