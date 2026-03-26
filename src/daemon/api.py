@@ -18,7 +18,13 @@ config = QConfig()
 
 
 def create_app() -> FastAPI:
-    """Build and return the FastAPI application."""
+    """Build and return the FastAPI application.
+
+    Returns
+    -------
+    FastAPI
+        Configured application with startup/shutdown hooks and all routes.
+    """
     app = FastAPI(title="Qubito Daemon", version="0.1.0")
     app.add_event_handler("startup", _on_startup)
     app.add_event_handler("shutdown", _on_shutdown)
@@ -80,7 +86,13 @@ class StatusResponse(BaseModel):
 
 
 def _register_routes(app: FastAPI) -> None:
-    """Attach all API routes to the app."""
+    """Attach all API routes to the app.
+
+    Parameters
+    ----------
+    app : FastAPI
+        The application instance to register routes on.
+    """
 
     @app.get("/status", response_model=StatusResponse)
     def get_status() -> StatusResponse:

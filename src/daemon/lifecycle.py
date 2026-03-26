@@ -22,7 +22,13 @@ def _base_url() -> str:
 
 
 def is_running() -> tuple[bool, int | None]:
-    """Check if the daemon process is alive via PID file."""
+    """Check if the daemon process is alive via PID file.
+
+    Returns
+    -------
+    tuple of (bool, int or None)
+        Whether the process is alive, and its PID if so.
+    """
     if not PID_FILE.exists():
         return False, None
     try:
@@ -39,7 +45,17 @@ def start_daemon(
     port: int | None = None,
     foreground: bool = False,
 ) -> None:
-    """Start the daemon process."""
+    """Start the daemon process.
+
+    Parameters
+    ----------
+    host : str or None
+        Bind address. Defaults to DAEMON_HOST.
+    port : int or None
+        Bind port. Defaults to DAEMON_PORT.
+    foreground : bool
+        If True, run in the current process instead of forking.
+    """
     running, pid = is_running()
     if running:
         print(f"Daemon already running (PID {pid})")
@@ -91,7 +107,13 @@ def stop_daemon() -> None:
 
 
 def daemon_status() -> dict | None:
-    """Get daemon status from the API, or None if not reachable."""
+    """Get daemon status from the API, or None if not reachable.
+
+    Returns
+    -------
+    dict or None
+        Status payload with ``pid`` injected, or None if daemon is down.
+    """
     running, pid = is_running()
     if not running:
         return None
@@ -105,7 +127,13 @@ def daemon_status() -> dict | None:
 
 
 def _wait_for_ready(timeout: int = 15) -> None:
-    """Poll /status until the server responds or timeout."""
+    """Poll /status until the server responds or timeout.
+
+    Parameters
+    ----------
+    timeout : int
+        Maximum seconds to wait before giving up.
+    """
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:

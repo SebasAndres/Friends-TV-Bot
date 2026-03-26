@@ -47,7 +47,20 @@ class SessionManager:
     def create(
         self, config: QConfig, character: str | None = None
     ) -> Session:
-        """Create a new session with a fresh Agent."""
+        """Create a new session with a fresh Agent.
+
+        Parameters
+        ----------
+        config : QConfig
+            Resolved configuration providing agent, rules, and MCP paths.
+        character : str or None
+            Character filename to load. Falls back to DEFAULT_CHARACTER.
+
+        Returns
+        -------
+        Session
+            The newly created session with an initialised Agent.
+        """
         agent_dirs = config.agents_dirs
         rules_dirs = config.rules_dirs
         mcp_paths = config.mcp_config_paths()
@@ -75,9 +88,33 @@ class SessionManager:
         return session
 
     def get(self, session_id: str) -> Session | None:
+        """Look up a session by id.
+
+        Parameters
+        ----------
+        session_id : str
+            The session identifier.
+
+        Returns
+        -------
+        Session or None
+            The session if found, otherwise None.
+        """
         return self._sessions.get(session_id)
 
     def delete(self, session_id: str) -> bool:
+        """Remove a session and close its agent.
+
+        Parameters
+        ----------
+        session_id : str
+            The session to delete.
+
+        Returns
+        -------
+        bool
+            True if the session existed and was removed.
+        """
         session = self._sessions.pop(session_id, None)
         if session:
             session.agent.close()
@@ -86,6 +123,13 @@ class SessionManager:
         return False
 
     def list_all(self) -> list[Session]:
+        """Return all active sessions.
+
+        Returns
+        -------
+        list of Session
+            Snapshot of current sessions.
+        """
         return list(self._sessions.values())
 
     def close_all(self) -> None:
@@ -96,7 +140,20 @@ class SessionManager:
 
 
 def _auto_approve_tool_call(tool_name: str, arguments: dict) -> bool:
-    """Non-interactive tool approval for daemon mode."""
+    """Non-interactive tool approval for daemon mode.
+
+    Parameters
+    ----------
+    tool_name : str
+        Name of the MCP tool being invoked.
+    arguments : dict
+        Arguments passed to the tool.
+
+    Returns
+    -------
+    bool
+        Always True (auto-approve in daemon context).
+    """
     args_summary = ", ".join(f"{k}={v!r}" for k, v in arguments.items())
     logger.info("tool call: %s(%s)", tool_name, args_summary)
     return True
