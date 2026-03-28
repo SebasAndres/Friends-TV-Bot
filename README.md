@@ -2,6 +2,8 @@
 
 A natural-language OS that runs as a background loop, executing commands through conversation. Search the web, run code, manage files, answer messages, create calendar events, and more — all through natural language, powered by LLM agents with configurable personalities.
 
+<img src='docs/architecture.png'>
+
 ## Setup
 
 ### Prerequisites
@@ -48,6 +50,8 @@ uv run qubito chat
 ```
 
 A random character will greet you. Type your messages and chat naturally. Type `q`, `/exit`, or `/quit` to leave.
+
+> **Note:** `qubito chat` and `qubito telegram` require the daemon to be running. Start it first with `qubito daemon start`.
 
 ### Daemon mode
 
@@ -147,11 +151,31 @@ Some example characters are included out of the box.
 
 ## Architecture
 
-- **CLI** (`src/cli/`) — argparse-based entry point with `chat`, `init`, `telegram`, `daemon` subcommands
+```
+ Channels                DaemonClient          Daemon (FastAPI)
+┌────────────────┐            │           ┌──────────────────────────┐
+│ Channel (ABC)  │            │           │  SessionManager          │
+│  ├ CLIChannel  │───HTTP────►│───HTTP───►│    └ Agent               │
+│  ├ Telegram    │            │           │       ├ AIModelFacade    │
+│  ├ Discord*    │            │           │       ├ RAG (FAISS)      │
+│  ├ Slack*      │            │           │       └ MCP Tools        │
+│  └ ...         │            │           │                          │
+└────────────────┘            │           │  AI Providers            │
+                              │           │  ┌──────┬────────┐       │
+  * = planned                 │           │  │Ollama│ Gemini │       │
+                              │           │  │OpenR.│ vLLM   │       │
+                              │           │  └──────┴────────┘       │
+                              │           └──────────────────────────┘
+```
+
+All messaging frontends implement the `Channel` abstract class and connect to the daemon via `DaemonClient` over HTTP. The daemon owns all AI logic — channels are thin transport adapters.
+
+- **Channels** (`src/channels/`) — abstract `Channel` interface with `CLIChannel` and `TelegramChannel` implementations
+- **CLI** (`src/cli/`) — argparse entry point with `chat`, `init`, `telegram`, `daemon` subcommands
 - **Daemon** (`src/daemon/`) — FastAPI server with session management, HTTP API, and process lifecycle
 - **Config** (`src/config/`) — two-tier path resolver (`~/.qubito/` + `.qubito/`) with legacy fallback
 - **Agents** (`src/agents/`) — `Agent` base class orchestrating AI model, RAG store, and MCP tools per character
-- **AI providers** (`src/genai/`) — pluggable backends: Ollama, Gemini, OpenRouter
+- **AI providers** (`src/genai/`) — pluggable backends: Ollama, Gemini, OpenRouter, vLLM
 - **RAG** (`src/rag/`) — FAISS-based document store with chunking and similarity search
 - **MCP** (`src/mcp/`) — sync wrapper around async MCP protocol for tool integration
 - **Skills** (`src/skills/`) — declarative slash commands loaded from markdown files
