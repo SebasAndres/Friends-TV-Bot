@@ -5,7 +5,7 @@ from logging import getLogger
 
 from src.agents.character_loader import CharacterData
 from src.genai import AIModelFacade
-from src.mcp import get_mcp_manager, init_mcp_manager
+from src.mcp import init_mcp_manager
 from src.constants import (
     AI_CLIENT_MODEL,
     AI_CLIENT_PROVIDER,
@@ -184,7 +184,6 @@ class Agent:
 
 
     _CONFIRM_TOOLS = {"read_file", "create_file", "edit_file", "delete_file"}
-
     def _default_on_tool_call(self, tool_name: str, arguments: dict) -> bool:
         """Display tool info and ask for confirmation on file operations."""
         from src.display import console
