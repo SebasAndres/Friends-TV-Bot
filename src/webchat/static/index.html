@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qubito Chat</title>
+<style>
+  :root { --bg: #1a1a2e; --surface: #16213e; --primary: #0f3460; --accent: #e94560; --text: #eee; --muted: #888; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; }
+  header { background: var(--surface); padding: 12px 20px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #333; }
+  header h1 { font-size: 1.1rem; font-weight: 600; }
+  #char-name { color: var(--accent); }
+  #char-select { background: var(--primary); color: var(--text); border: 1px solid #444; border-radius: 6px; padding: 4px 8px; font-size: 0.85rem; }
+  #messages { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 75%; padding: 10px 14px; border-radius: 12px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; font-size: 0.95rem; }
+  .msg.user { align-self: flex-end; background: var(--primary); border-bottom-right-radius: 4px; }
+  .msg.assistant { align-self: flex-start; background: var(--surface); border-bottom-left-radius: 4px; }
+  .msg.system { align-self: center; color: var(--muted); font-size: 0.85rem; font-style: italic; }
+  .msg .tool-progress { color: var(--muted); font-size: 0.8rem; }
+  #input-area { background: var(--surface); padding: 12px 20px; display: flex; gap: 10px; border-top: 1px solid #333; }
+  #input-area input { flex: 1; background: var(--bg); color: var(--text); border: 1px solid #444; border-radius: 8px; padding: 10px 14px; font-size: 0.95rem; outline: none; }
+  #input-area input:focus { border-color: var(--accent); }
+  #input-area button { background: var(--accent); color: #fff; border: none; border-radius: 8px; padding: 10px 20px; font-size: 0.95rem; cursor: pointer; }
+  #input-area button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .typing { color: var(--muted); font-style: italic; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Qubito</h1>
+  <span id="char-emoji"></span>
+  <span id="char-name"></span>
+  <select id="char-select"><option value="">Loading...</option></select>
+  <button id="change-btn" onclick="changeCharacter()" style="background:var(--primary);color:var(--text);border:1px solid #444;border-radius:6px;padding:4px 12px;font-size:0.85rem;cursor:pointer;">Change</button>
+</header>
+
+<div id="messages"></div>
+
+<div id="input-area">
+  <input id="msg-input" type="text" placeholder="Type a message..." autocomplete="off" />
+  <button id="send-btn" onclick="sendMessage()">Send</button>
+</div>
+
+<script>
+const API = window.location.origin;
+let sessionId = null;
+let sending = false;
+
+const msgContainer = document.getElementById('messages');
+const msgInput = document.getElementById('msg-input');
+const sendBtn = document.getElementById('send-btn');
+const charSelect = document.getElementById('char-select');
+
+msgInput.addEventListener('keydown', e => { if (e.key === 'Enter' && !sending) sendMessage(); });
+
+async function init() {
+  const chars = await fetch(`${API}/characters`).then(r => r.json());
+  charSelect.innerHTML = '<option value="">Random</option>' +
+    chars.map(c => `<option value="${c.filename}">${c.emoji} ${c.name}</option>`).join('');
+  await createSession();
+}
+
+async function createSession(character) {
+  const body = character ? { character } : {};
+  const resp = await fetch(`${API}/sessions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await resp.json();
+  sessionId = data.id;
+  document.getElementById('char-emoji').textContent = data.emoji;
+  document.getElementById('char-name').textContent = data.character_name;
+  msgContainer.innerHTML = '';
+  addMessage('system', `${data.emoji} ${data.hi_message}`);
+}
+
+async function changeCharacter() {
+  if (sessionId) await fetch(`${API}/sessions/${sessionId}`, { method: 'DELETE' });
+  const selected = charSelect.value || undefined;
+  await createSession(selected);
+}
+
+function addMessage(role, text) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  msgContainer.appendChild(div);
+  msgContainer.scrollTop = msgContainer.scrollHeight;
+  return div;
+}
+
+async function sendMessage() {
+  const text = msgInput.value.trim();
+  if (!text || sending) return;
+  sending = true;
+  sendBtn.disabled = true;
+  msgInput.value = '';
+
+  addMessage('user', text);
+  const assistantDiv = addMessage('assistant', '');
+  let progressDiv = null;
+
+  try {
+    const resp = await fetch(`${API}/message/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, message: text }),
+    });
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const event = JSON.parse(line.slice(6));
+        if (event.type === 'progress') {
+          if (!progressDiv) {
+            progressDiv = document.createElement('div');
+            progressDiv.className = 'tool-progress';
+            assistantDiv.appendChild(progressDiv);
+          }
+          progressDiv.textContent = `> ${event.message}`;
+        } else if (event.type === 'done') {
+          if (progressDiv) progressDiv.remove();
+          assistantDiv.textContent = event.response;
+        }
+      }
+    }
+  } catch (err) {
+    assistantDiv.textContent = `Error: ${err.message}`;
+  }
+
+  sending = false;
+  sendBtn.disabled = false;
+  msgInput.focus();
+  msgContainer.scrollTop = msgContainer.scrollHeight;
+}
+
+init();
+</script>
+</body>
+</html>
