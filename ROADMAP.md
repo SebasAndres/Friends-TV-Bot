@@ -9,10 +9,10 @@
 
 _Priority: things that are stubbed or broken today._
 
-- [ ] **Conversation persistence** — save/load chat history to disk (SQLite or JSON lines) so context survives restarts. `Agent._load_recent_conversations()` currently returns `[]`.
-- [ ] **PDF extraction** — implement the `/load` handler for PDFs (currently `NotImplementedError`).
-- [ ] **Test suite** — add at least unit tests for config resolution, character loading, skill registry, and the tool-call loop. There are zero tests today.
-- [ ] **Error resilience** — graceful handling of provider timeouts, MCP server crashes, and malformed tool responses so the agent doesn't die.
+- [x] **Conversation persistence** — SQLite-backed `ConversationDB` at `~/.qubito/qubito.db`. Sessions and messages persist across daemon restarts. `Agent._load_recent_conversations()` loads from DB when available.
+- [x] **PDF extraction** — implemented via `pymupdf` in `src/files.py`. The `/load` handler supports PDF, images (OCR), and plain text.
+- [x] **Test suite** — 51 tests covering config resolution, character loading, skill registry, tool-call loop, conversation DB, and event bus. pytest with dev dependencies.
+- [x] **Error resilience** — Timeouts on MCP tool calls (30s), provider HTTP calls (60-120s). Retry decorator for Ollama/Gemini on transient errors. Graceful tool failure handling in model facade. MCP server crash recovery with auto-reconnect.
 
 ---
 
@@ -20,20 +20,17 @@ _Priority: things that are stubbed or broken today._
 
 _This is the single biggest architectural shift. OpenClaw's core is a long-running gateway process._
 
-- [ ] **Daemon mode** (`qubito daemon start/stop/status`)
-  - Run as a `systemd --user` service on Linux (like OpenClaw uses launchd/systemd).
-  - PID file + health-check endpoint.
-  - Auto-restart on crash.
-- [ ] **Event bus / message router**
-  - Internal pub/sub (asyncio queues or a lightweight broker) that decouples _channels_ from _agents_.
-  - Inbound message → route to correct agent → response back to originating channel.
-- [ ] **Session manager**
-  - Track per-channel, per-user sessions with conversation history.
-  - Session timeout / eviction policy.
-- [ ] **Local API**
-  - WebSocket or HTTP server on `127.0.0.1` (like OpenClaw's `ws://127.0.0.1:18789`).
-  - Endpoints: `POST /message`, `GET /sessions`, `GET /status`, `POST /agent/switch`.
-  - This becomes the single control plane everything else talks to.
+- [x] **Daemon mode** (`qubito daemon start/stop/status/install/uninstall`)
+  - Runs as `systemd --user` service (`qubito daemon install`). `Restart=on-failure` with 5s delay.
+  - PID file at `~/.qubito/daemon.pid` + `/status` health-check endpoint.
+- [x] **Event bus / message router**
+  - Async `EventBus` with pub/sub in `src/bus/`. Emits `message.inbound` and `message.outbound` events from API endpoints.
+  - Channels continue using HTTP; bus is additive infrastructure for Phase 2+ migration.
+- [x] **Session manager**
+  - In-memory `SessionManager` backed by SQLite persistence. Per-session conversation history.
+  - Configurable idle timeout (`QUBITO_SESSION_TIMEOUT`, default 30min) with background eviction loop.
+- [x] **Local API**
+  - FastAPI on `127.0.0.1:8741`. Endpoints: `POST /message`, `POST /message/stream` (SSE), `GET/POST/DELETE /sessions`, `GET /status`, `GET /characters`.
 
 ---
 
@@ -41,14 +38,14 @@ _This is the single biggest architectural shift. OpenClaw's core is a long-runni
 
 _OpenClaw's killer feature is 25+ channel integrations. Start with high-value ones._
 
-- [ ] **Channel abstraction** — define a `Channel` interface: `receive()`, `send()`, `channel_id`, `user_id`.
-- [ ] **Refactor Telegram** to implement the `Channel` interface and connect through the event bus instead of running standalone.
-- [ ] **WhatsApp** — via Baileys (JS) or whatsapp-web.js running as an MCP server / subprocess.
+- [x] **Channel abstraction** — `Channel` ABC in `src/channels/base.py` with `start()`, `stop()`, `client: DaemonClient`.
+- [x] **Refactor Telegram** — `TelegramChannel(Channel)` uses `DaemonClient` to communicate with daemon.
+- [ ] **WhatsApp** — via WhatsApp Cloud API (webhook-based, runs inside daemon).
 - [ ] **Discord** — discord.py bot connecting through the channel abstraction.
 - [ ] **Slack** — Slack Bolt app as a channel.
 - [ ] **Signal** — via signal-cli or signald.
-- [ ] **WebChat** — simple web UI served by the local API (HTML + WebSocket).
-- [ ] **CLI** — refactor `cmd_chat.py` to be a thin client that talks to the daemon API instead of running the agent in-process.
+- [ ] **WebChat** — simple web UI served by the local API (HTML + SSE).
+- [x] **CLI** — `CLIChannel(Channel)` is a thin client that talks to the daemon API via `DaemonClient`.
 
 ---
 
