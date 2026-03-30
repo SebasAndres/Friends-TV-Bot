@@ -10,7 +10,7 @@ A natural-language OS that runs as a background loop, executing commands through
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)
-- An LLM provider ([Ollama](https://ollama.com/), [Gemini](https://aistudio.google.com/), or [OpenRouter](https://openrouter.ai/))
+- An LLM provider ([Ollama](https://ollama.com/), [Gemini](https://aistudio.google.com/), [OpenRouter](https://openrouter.ai/), or [vLLM](https://docs.vllm.ai/))
 
 ### Install
 
