@@ -21,16 +21,19 @@ def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="qubito", description="Qubito — natural-language OS")
     sub = parser.add_subparsers(dest="command")
 
-    sub.add_parser("chat", help="Interactive terminal chat")
+    cp = sub.add_parser("chat", help="Interactive terminal chat")
+    cp.add_argument("-c", "--character", default=None, help="Character name to use (e.g. joey)")
+    cp.add_argument("--pick", action="store_true", help="Interactively pick a character")
     sub.add_parser("init", help="Set up ~/.qubito/")
 
     np = sub.add_parser("new-project", help="Create .qubito/ overrides in a project directory")
     np.add_argument("path", nargs="?", default=None, help="Project path (default: current directory)")
 
     sub.add_parser("telegram", help="Run the Telegram bot")
+    sub.add_parser("discord", help="Run the Discord bot")
 
     dp = sub.add_parser("daemon", help="Manage the background daemon")
-    dp.add_argument("action", choices=["start", "stop", "status"], help="Daemon action")
+    dp.add_argument("action", choices=["start", "stop", "status", "install", "uninstall"], help="Daemon action")
     dp.add_argument("--host", default=None, help="Bind host (default: 127.0.0.1)")
     dp.add_argument("--port", type=int, default=None, help="Bind port (default: 8741)")
     dp.add_argument("--foreground", action="store_true", help="Run in foreground (for systemd)")
@@ -49,7 +52,10 @@ def main() -> None:
 
     if command == "chat":
         from src.cli.cmd_chat import run_chat
-        run_chat()
+        run_chat(
+            character=getattr(args, "character", None),
+            pick=getattr(args, "pick", False),
+        )
     elif command == "init":
         from src.cli.cmd_init import run_init
         run_init()
@@ -59,6 +65,9 @@ def main() -> None:
     elif command == "telegram":
         from src.cli.cmd_telegram import run_telegram
         run_telegram()
+    elif command == "discord":
+        from src.cli.cmd_discord import run_discord
+        run_discord()
     elif command == "daemon":
         from src.cli.cmd_daemon import run_daemon
         run_daemon(args.action, host=args.host, port=args.port, foreground=args.foreground)
