@@ -6,6 +6,7 @@ import numpy as np
 
 from src.genai import AIClient
 from src.genai.chat_response import ChatResponse, ToolCall
+from src.genai.clients import retry_on_transient
 
 
 class GeminiClient(AIClient):
@@ -32,8 +33,12 @@ class GeminiClient(AIClient):
             raise ValueError("GOOGLE_API_KEY is required to use Gemini.")
 
         self.genai = genai
-        self.client = genai.Client(api_key=self.api_key)
+        self.client = genai.Client(
+            api_key=self.api_key,
+            http_options={"timeout": 60_000},
+        )
 
+    @retry_on_transient()
     def chat(
         self,
         model: str,

@@ -17,6 +17,14 @@ PID_FILE = Path.home() / ".qubito" / "daemon.pid"
 LOG_FILE = Path.home() / ".qubito" / "daemon.log"
 
 
+def _resolve_python() -> Path:
+    """Return the project virtualenv Python, falling back to sys.executable."""
+    venv_python = Path.cwd() / ".venv" / "bin" / "python"
+    if venv_python.is_file():
+        return venv_python
+    return Path(sys.executable)
+
+
 def _base_url() -> str:
     return f"http://{DAEMON_HOST}:{DAEMON_PORT}"
 
@@ -73,8 +81,9 @@ def start_daemon(
         return
 
     log_handle = LOG_FILE.open("a")
+    python = _resolve_python()
     proc = subprocess.Popen(
-        [sys.executable, "-m", "src.daemon.server"],
+        [str(python), "-m", "src.daemon.server"],
         start_new_session=True,
         stdout=log_handle,
         stderr=log_handle,
@@ -124,6 +133,53 @@ def daemon_status() -> dict | None:
         return data
     except httpx.ConnectError:
         return {"pid": pid, "status": "starting"}
+
+
+_SERVICE_TEMPLATE = """\
+[Unit]
+Description=Qubito AI Agent Daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={python} -m src.daemon.server
+WorkingDirectory={working_dir}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+"""
+
+_SERVICE_DIR = Path.home() / ".config" / "systemd" / "user"
+_SERVICE_NAME = "qubito.service"
+
+
+def install_service() -> None:
+    """Install a systemd --user service for the Qubito daemon."""
+    _SERVICE_DIR.mkdir(parents=True, exist_ok=True)
+    unit = _SERVICE_TEMPLATE.format(
+        python=_resolve_python(),
+        working_dir=Path.cwd(),
+    )
+    service_path = _SERVICE_DIR / _SERVICE_NAME
+    service_path.write_text(unit)
+    subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+    subprocess.run(["systemctl", "--user", "enable", "qubito"], check=True)
+    print(f"Service installed at {service_path}")
+    print("Start with: systemctl --user start qubito")
+
+
+def uninstall_service() -> None:
+    """Remove the systemd --user service."""
+    subprocess.run(["systemctl", "--user", "disable", "--now", "qubito"], check=False)
+    service_path = _SERVICE_DIR / _SERVICE_NAME
+    if service_path.exists():
+        service_path.unlink()
+        subprocess.run(["systemctl", "--user", "daemon-reload"], check=True)
+        print("Service uninstalled")
+    else:
+        print("Service not found")
 
 
 def _wait_for_ready(timeout: int = 15) -> None:

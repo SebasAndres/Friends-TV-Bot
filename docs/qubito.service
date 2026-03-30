@@ -1,0 +1,20 @@
+# Qubito systemd user service template.
+# Installed automatically by: qubito daemon install
+# Manual install:
+#   cp docs/qubito.service ~/.config/systemd/user/qubito.service
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now qubito
+
+[Unit]
+Description=Qubito AI Agent Daemon
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={python} -m src.daemon.server
+WorkingDirectory={working_dir}
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

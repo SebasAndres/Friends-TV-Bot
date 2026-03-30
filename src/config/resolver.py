@@ -49,6 +49,10 @@ class QConfig:
     def memory_dir(self) -> Path:
         return self._global_dir / "memory"
 
+    @property
+    def db_path(self) -> Path:
+        return self._global_dir / "qubito.db"
+
     def mcp_config_paths(self) -> list[Path]:
         """Return all existing MCP config JSON files, highest priority first."""
         candidates: list[Path] = []

@@ -1,5 +1,6 @@
 import json
 from functools import lru_cache
+from logging import getLogger
 
 import numpy as np
 from ollama import Client
@@ -7,6 +8,9 @@ from ollama import Client
 from src.constants import OLLAMA_HOST
 from src.genai import AIClient
 from src.genai.chat_response import ChatResponse, ToolCall
+from src.genai.clients import retry_on_transient
+
+logger = getLogger(__name__)
 
 
 class OllamaClient(AIClient):
@@ -28,8 +32,9 @@ class OllamaClient(AIClient):
         """
         if not host:
             raise ValueError("Ollama host is required.")
-        self.client = Client(host=host)
+        self.client = Client(host=host, timeout=120)
 
+    @retry_on_transient()
     def chat(
         self,
         model: str,
@@ -96,8 +101,8 @@ class OllamaClient(AIClient):
             return ChatResponse(content=content, tool_calls=tool_calls)
 
         except Exception as e:
-            print(type(e), e)
-            return ChatResponse(content=None)
+            logger.error("Ollama chat error: %s", e)
+            raise
 
     def embed(self, model: str, texts: list[str]) -> np.ndarray:
         """

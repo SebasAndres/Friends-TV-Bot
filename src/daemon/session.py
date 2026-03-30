@@ -18,6 +18,7 @@ from src.rules import load_all_rules
 
 if TYPE_CHECKING:
     from src.config.resolver import QConfig
+    from src.persistence.conversation_db import ConversationDB
 
 logger = getLogger(__name__)
 
@@ -32,17 +33,23 @@ class Session:
     emoji: str
     color: str
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    last_active: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
     def message_count(self) -> int:
         return len([m for m in self.agent.get_history() if m.get("role") == "user"])
 
+    def touch(self) -> None:
+        """Update the last_active timestamp."""
+        self.last_active = datetime.now(timezone.utc)
+
 
 class SessionManager:
-    """In-memory store for active sessions."""
+    """In-memory store for active sessions, optionally backed by SQLite."""
 
-    def __init__(self) -> None:
+    def __init__(self, db: ConversationDB | None = None) -> None:
         self._sessions: dict[str, Session] = {}
+        self.db: ConversationDB | None = db
 
     def create(
         self, config: QConfig, character: str | None = None
@@ -72,10 +79,16 @@ class SessionManager:
             char_data = load_random_character(dirs=agent_dirs)
 
         rules = load_all_rules(dirs=rules_dirs)
-        agent = Agent(char_data, rules=rules, mcp_config_paths=mcp_paths)
+        session_id = uuid.uuid4().hex[:12]
+        agent = Agent(
+            char_data,
+            rules=rules,
+            mcp_config_paths=mcp_paths,
+            session_id=session_id,
+            db=self.db,
+        )
         agent.on_tool_call = _auto_approve_tool_call
 
-        session_id = uuid.uuid4().hex[:12]
         session = Session(
             id=session_id,
             agent=agent,
@@ -84,6 +97,10 @@ class SessionManager:
             color=char_data.color,
         )
         self._sessions[session_id] = session
+
+        if self.db:
+            self.db.save_session(session_id, char_data.name, char_data.emoji, char_data.color)
+
         logger.info("Created session %s (%s)", session_id, char_data.name)
         return session
 
@@ -118,6 +135,8 @@ class SessionManager:
         session = self._sessions.pop(session_id, None)
         if session:
             session.agent.close()
+            if self.db:
+                self.db.delete_session(session_id)
             logger.info("Deleted session %s", session_id)
             return True
         return False
@@ -131,6 +150,21 @@ class SessionManager:
             Snapshot of current sessions.
         """
         return list(self._sessions.values())
+
+    def evict_idle(self, timeout_minutes: int) -> list[str]:
+        """Remove sessions idle longer than *timeout_minutes*.
+
+        Returns
+        -------
+        list of str
+            IDs of evicted sessions.
+        """
+        from datetime import timedelta
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=timeout_minutes)
+        to_evict = [sid for sid, s in self._sessions.items() if s.last_active < cutoff]
+        for sid in to_evict:
+            self.delete(sid)
+        return to_evict
 
     def close_all(self) -> None:
         for session in self._sessions.values():

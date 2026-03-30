@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from logging import getLogger
+from typing import TYPE_CHECKING
 
 from src.agents.character_loader import CharacterData
 from src.genai import AIModelFacade
@@ -14,6 +15,9 @@ from src.constants import (
 )
 from src.rag import FaissDocumentStore
 
+if TYPE_CHECKING:
+    from src.persistence.conversation_db import ConversationDB
+
 logger = getLogger(__name__)
 
 
@@ -24,6 +28,8 @@ class Agent:
         character: CharacterData,
         rules: str = "",
         mcp_config_paths: list[object] | None = None,
+        session_id: str | None = None,
+        db: ConversationDB | None = None,
     ) -> None:
         """Initialize an agent with chat model, document store, and MCP tools."""
         self.name = character.name
@@ -34,6 +40,8 @@ class Agent:
         self.bye_message = character.bye_message
         self.thinking = character.thinking
         self.rules = rules
+        self._session_id = session_id
+        self._db = db
 
         self.history = self._load_recent_conversations()
         self.system_prompt = self._create_system_prompt()
@@ -237,8 +245,11 @@ class Agent:
         Returns
         -------
         list[dict[str, str]]
-            Previously stored messages. Current implementation returns an
-            empty list.
+            Previously stored messages, or empty list if no DB configured.
         """
-
+        if self._db and self._session_id:
+            try:
+                return self._db.load_messages(self._session_id)
+            except Exception as e:
+                logger.warning("Failed to load history for %s: %s", self._session_id, e)
         return []

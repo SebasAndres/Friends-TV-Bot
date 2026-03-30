@@ -4,8 +4,11 @@ from __future__ import annotations
 
 
 def run_daemon(action: str, host: str | None = None, port: int | None = None, foreground: bool = False) -> None:
-    """Dispatch daemon start/stop/status actions."""
-    from src.daemon.lifecycle import start_daemon, stop_daemon, daemon_status
+    """Dispatch daemon start/stop/status/install/uninstall actions."""
+    from src.daemon.lifecycle import (
+        start_daemon, stop_daemon, daemon_status,
+        install_service, uninstall_service,
+    )
 
     if action == "start":
         start_daemon(host=host, port=port, foreground=foreground)
@@ -22,5 +25,9 @@ def run_daemon(action: str, host: str | None = None, port: int | None = None, fo
             uptime = info.get("uptime_seconds")
             if uptime is not None:
                 print(f"Uptime: {uptime:.0f}s")
+    elif action == "install":
+        install_service()
+    elif action == "uninstall":
+        uninstall_service()
     else:
-        print(f"Unknown action: {action}. Use start, stop, or status.")
+        print(f"Unknown action: {action}. Use start, stop, status, install, or uninstall.")
