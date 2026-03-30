@@ -34,6 +34,7 @@ class MCPManager:
         self._tool_server_map: dict[str, str] = {}
         self._lazy_configs: dict[str, dict] = {}
         self._lazy_connected: set[str] = set()
+        self._all_configs: dict[str, dict] = {}
 
     # ------------------------------------------------------------------
     # Public (sync) API
@@ -102,6 +103,7 @@ class MCPManager:
             config: dict = json.load(fh)
 
         for server_name, server_cfg in config.items():
+            self._all_configs[server_name] = server_cfg
             is_lazy = server_cfg.get("lazy", False)
             try:
                 if is_lazy:
@@ -240,22 +242,40 @@ class MCPManager:
 
         try:
             return await self._execute_tool_call(server_name, name, arguments)
-        except Exception:
-            # Session may be stale — reconnect and retry once
+        except Exception as exc:
+            logger.warning("MCP tool '%s' failed: %s. Attempting reconnect.", name, exc)
+            self._sessions.pop(server_name, None)
+
             if server_name in self._lazy_configs:
-                logger.info("MCP server '%s': session broken, reconnecting", server_name)
                 self._lazy_connected.discard(server_name)
-                self._sessions.pop(server_name, None)
                 try:
                     await self._ensure_lazy_connected(server_name)
                     return await self._execute_tool_call(server_name, name, arguments)
-                except Exception as exc:
-                    return f"Error: tool '{name}' failed after reconnect: {exc}"
-            return f"Error: tool '{name}' call failed"
+                except Exception as retry_exc:
+                    return f"Error: tool '{name}' failed after reconnect: {retry_exc}"
+            elif server_name in self._all_configs:
+                try:
+                    from mcp import ClientSession
+                    from mcp.client.stdio import StdioServerParameters, stdio_client
+                    await self._connect_one(
+                        server_name, self._all_configs[server_name],
+                        ClientSession, StdioServerParameters, stdio_client,
+                    )
+                    return await self._execute_tool_call(server_name, name, arguments)
+                except Exception as retry_exc:
+                    return f"Error: tool '{name}' failed after reconnect: {retry_exc}"
+            return f"Error: tool '{name}' call failed: {exc}"
 
     async def _execute_tool_call(self, server_name: str, name: str, arguments: dict) -> str:
         session = self._sessions[server_name]
-        result = await session.call_tool(name, arguments)
+        try:
+            result = await asyncio.wait_for(
+                session.call_tool(name, arguments),
+                timeout=30.0,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("MCP tool '%s' timed out after 30s", name)
+            raise
 
         texts: list[str] = []
         for block in result.content:
