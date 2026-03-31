@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 
 @dataclass
@@ -21,3 +21,21 @@ class ChatResponse:
     @property
     def has_tool_calls(self) -> bool:
         return len(self.tool_calls) > 0
+
+
+@dataclass
+class VirtualTool:
+    """A locally-defined tool the model can invoke without MCP."""
+
+    name: str
+    description: str
+    input_schema: dict[str, Any]
+    handler: Callable[..., str]
+
+    @property
+    def definition(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "input_schema": self.input_schema,
+        }

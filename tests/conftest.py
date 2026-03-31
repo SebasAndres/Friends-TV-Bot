@@ -98,6 +98,8 @@ def sample_character() -> CharacterData:
 class MockAIClient:
     """Fake AIClient returning pre-configured responses."""
 
+    tool_arguments_as_dict: bool = False
+
     def __init__(self, responses: list[ChatResponse] | None = None) -> None:
         self.responses = list(responses or [ChatResponse(content="mock response")])
         self._call_index = 0

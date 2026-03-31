@@ -7,7 +7,6 @@ import json
 import os
 import threading
 from contextlib import AsyncExitStack
-from functools import lru_cache
 from logging import getLogger
 from pathlib import Path
 
@@ -284,52 +283,35 @@ class MCPManager:
         return "\n".join(texts) if texts else str(result.content)
 
 
-@lru_cache(maxsize=1)
-def get_mcp_manager() -> MCPManager | None:
-    """Return the cached MCPManager singleton.
+_singleton: MCPManager | None = None
+_initialized: bool = False
 
-    Returns
-    -------
-    MCPManager or None
-        The instance set by :func:`init_mcp_manager`, or None if not
-        initialised or no tools were discovered.
-    """
+
+def get_mcp_manager() -> MCPManager | None:
+    """Return the MCPManager singleton, or None if not yet initialised."""
     return _singleton
 
 
-_singleton: MCPManager | None = None
-
-
 def init_mcp_manager(config_paths: list[Path] | None = None) -> MCPManager | None:
-    """Initialise the MCPManager singleton and cache it.
-
-    Connects to all MCP servers found in the provided paths. Safe to call
-    multiple times — subsequent calls are no-ops.
+    """Initialise the MCPManager singleton. Safe to call multiple times — subsequent calls are no-ops.
 
     Parameters
     ----------
     config_paths : list of Path or None
         JSON config files to load. Falls back to the project-root
         ``mcp_servers.json`` when empty or None.
-
-    Returns
-    -------
-    MCPManager or None
-        The shared manager instance, or None if no configs were found or
-        no tools were discovered.
     """
-    global _singleton
+    global _singleton, _initialized
 
-    if get_mcp_manager.cache_info().currsize:
-        return get_mcp_manager()
+    if _initialized:
+        return _singleton
 
+    _initialized = True
     paths = config_paths if config_paths is not None else []
     if not paths and _DEFAULT_CONFIG_PATH.exists():
         paths = [_DEFAULT_CONFIG_PATH]
 
     if not paths:
-        get_mcp_manager.cache_clear()
-        get_mcp_manager()
         return None
 
     try:
@@ -346,5 +328,4 @@ def init_mcp_manager(config_paths: list[Path] | None = None) -> MCPManager | Non
     except Exception as exc:
         logger.warning("MCP initialization failed: %s", exc)
 
-    get_mcp_manager.cache_clear()
-    return get_mcp_manager()
+    return _singleton

@@ -11,6 +11,8 @@ class AIClient:
     Interface for provider-specific chat and embedding clients.
     """
 
+    tool_arguments_as_dict: bool = False
+
     def __init__(self, **kwargs):
         """
         Initialize a provider client.

@@ -5,6 +5,7 @@ from concurrent.futures import ThreadPoolExecutor
 from logging import getLogger
 from typing import TYPE_CHECKING, Callable
 
+from src.genai.chat_response import VirtualTool
 from src.genai.providers import Provider
 
 if TYPE_CHECKING:
@@ -23,52 +24,28 @@ class AIModelFacade:
         provider: Provider,
         model: str,
         system_prompt: str,
-        history: list[dict[str, str]]
-    ):
-        """
-        Initializes the AIModelFacade with the specified model and sets up
-        the AI client.
-
-        Parameters
-        ----------
-        provider : Provider
-            The provider of the AI model to use for generating responses.
-        model : str
-            The name of the AI model to use for generating responses.
-        system_prompt : str
-            The system prompt that defines context and behavior instructions.
-        history : list[dict[str, str]]
-            Existing conversation history to prepend after the system message.
-
-        Returns
-        -------
-        None
-            Initializes internal client and conversation history state.
-        """
-
+        history: list[dict[str, str]],
+    ) -> None:
         self.model = model
         self.provider = provider
         self.system_prompt = system_prompt
         self.max_tool_rounds = MAX_TOOL_ROUNDS
-        self.virtual_tools: dict[str, object] = {}
-        self.history = [
+        self._virtual_tools: dict[str, VirtualTool] = {}
+        self.history: list[dict] = [
             {"role": "system", "content": self.system_prompt},
-            *history
+            *history,
         ]
-
         self._setup_client(provider)
 
+    def register_tool(self, tool: VirtualTool) -> None:
+        """Register a local tool the model can invoke."""
+        self._virtual_tools[tool.name] = tool
 
-    def _setup_client(self, provider: Provider):
-        """
-        Setup AI client according to the provider 
+    def unregister_tool(self, name: str) -> None:
+        """Remove a previously registered virtual tool."""
+        self._virtual_tools.pop(name, None)
 
-        Parameters
-        ----------
-        - provider: Provider
-            The provider of the AI model            
-        """
-
+    def _setup_client(self, provider: Provider) -> None:
         if provider == Provider.OLLAMA:
             from src.genai.clients.ollama import get_ollama_client
             self.client = get_ollama_client()
@@ -81,64 +58,39 @@ class AIModelFacade:
         elif provider == Provider.VLLM:
             from src.genai.clients.vllm import get_vllm_client
             self.client = get_vllm_client()
+        elif provider == Provider.ANTHROPIC:
+            from src.genai.clients.anthropic import get_anthropic_client
+            self.client = get_anthropic_client()
         else:
             raise ValueError(f"Unsupported provider: {provider}")
 
-
     def add_to_history(self, role: str, content: str) -> None:
-        """
-        Adds a message to the conversation history.
-
-        Parameters
-        ----------
-        role : str
-            Chat role of message (for example, ``user`` or ``assistant``).
-        content : str
-            Message content to append.
-
-        Returns
-        -------
-        None
-            The message is appended to in-memory history.
-        """
-
+        """Append a message to the conversation history."""
         self.history.append({"role": role, "content": content})
 
     def generate_response(
         self,
         user_message: str,
-        retrieval_context: str | None = None,
         mcp_manager: MCPManager | None = None,
         on_tool_call: Callable[[str, dict], bool] | None = None,
         skill_instructions: str | None = None,
     ) -> str:
-        """Generate a response using the AI model with optional tool use.
+        """Generate a response, letting the model call tools as needed.
 
         Parameters
         ----------
         user_message : str
             The message from the user to respond to.
-        retrieval_context : str or None
-            RAG context injected as a temporary system message.
         mcp_manager : MCPManager or None
             MCP manager providing tool definitions and execution.
         on_tool_call : callable or None
             Callback ``(tool_name, arguments) -> bool`` for tool approval.
         skill_instructions : str or None
-            Skill-specific instructions injected into the prompt.
-
-        Returns
-        -------
-        str
-            The AI model's response text.
+            Skill-specific instructions injected into the prompt for this turn.
         """
-        messages, tool_messages = self._build_turn_messages(
-            user_message, retrieval_context, skill_instructions,
-        )
-        tools = mcp_manager.get_tools() if mcp_manager else None
-        if self.virtual_tools:
-            vtool_defs = [vt["definition"] for vt in self.virtual_tools.values()]
-            tools = (tools or []) + vtool_defs
+        messages = self._build_turn_messages(user_message, skill_instructions)
+        tools = self._collect_tool_definitions(mcp_manager)
+        tool_messages: list[dict] = []
 
         try:
             content = self._run_tool_loop(
@@ -156,32 +108,30 @@ class AIModelFacade:
     def _build_turn_messages(
         self,
         user_message: str,
-        retrieval_context: str | None,
         skill_instructions: str | None,
-    ) -> tuple[list[dict], list[dict]]:
+    ) -> list[dict]:
         """Build the message list for a single turn.
 
-        Parameters
-        ----------
-        user_message : str
-            The user's input text.
-        retrieval_context : str or None
-            Optional RAG context to prepend.
-        skill_instructions : str or None
-            Optional skill instructions to prepend.
-
-        Returns
-        -------
-        tuple of (list[dict], list[dict])
-            The full message list and an empty tool-messages accumulator.
+        Copies the current history and appends the user message.
+        Skill instructions are injected as a temporary system message.
         """
         messages: list[dict] = list(self.history)
-        if retrieval_context:
-            messages.append({"role": "system", "content": f"[context-used]\n{retrieval_context}"})
         if skill_instructions:
-            messages.append({"role": "system", "content": f"[skill]\n{skill_instructions}"})
+            messages.append({
+                "role": "system",
+                "content": f"[skill]\n{skill_instructions}",
+            })
         messages.append({"role": "user", "content": user_message})
-        return messages, []
+        return messages
+
+    def _collect_tool_definitions(
+        self, mcp_manager: MCPManager | None,
+    ) -> list[dict] | None:
+        """Merge MCP and virtual tool definitions into a single list."""
+        mcp_tools = mcp_manager.get_tools() if mcp_manager else []
+        vtool_defs = [vt.definition for vt in self._virtual_tools.values()]
+        combined = mcp_tools + vtool_defs
+        return combined or None
 
     def _run_tool_loop(
         self,
@@ -191,26 +141,7 @@ class AIModelFacade:
         mcp_manager: MCPManager | None,
         on_tool_call: Callable[[str, dict], bool] | None,
     ) -> str:
-        """Chat with the model, executing tool calls up to MAX_TOOL_ROUNDS.
-
-        Parameters
-        ----------
-        messages : list of dict
-            Conversation messages (mutated in place).
-        tool_messages : list of dict
-            Accumulator for tool-related messages to persist later.
-        tools : list of dict or None
-            Tool definitions from MCP, or None to disable tools.
-        mcp_manager : MCPManager or None
-            Manager used to execute tool calls.
-        on_tool_call : callable or None
-            Approval callback for each tool invocation.
-
-        Returns
-        -------
-        str
-            The final text content from the model.
-        """
+        """Chat with the model, executing tool calls up to MAX_TOOL_ROUNDS."""
         response = None
         tool_cache: dict[tuple[str, str], str] = {}
 
@@ -230,6 +161,45 @@ class AIModelFacade:
             raise ValueError("Received empty response from the AI model.")
         return content
 
+    def _build_tool_call_msg(self, response: object) -> dict:
+        args_as_dict = self.client.tool_arguments_as_dict
+        return {
+            "role": "assistant",
+            "content": response.content,
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.name,
+                        "arguments": tc.arguments if args_as_dict else json.dumps(tc.arguments),
+                    },
+                }
+                for tc in response.tool_calls
+            ],
+        }
+
+    def _exec_tool_call(
+        self,
+        tc: object,
+        tool_cache: dict[tuple[str, str], str],
+        mcp_manager: MCPManager | None,
+        on_tool_call: Callable[[str, dict], bool] | None,
+    ) -> tuple[object, str]:
+        if on_tool_call and not on_tool_call(tc.name, tc.arguments):
+            return tc, "Tool call denied by user."
+        cache_key = (tc.name, json.dumps(tc.arguments, sort_keys=True))
+        if cache_key in tool_cache:
+            return tc, tool_cache[cache_key]
+        try:
+            result = self._execute_tool(tc, mcp_manager)
+            result = result if isinstance(result, str) else str(result)
+            tool_cache[cache_key] = result
+            return tc, result
+        except Exception as e:
+            logger.warning("Tool call %s failed: %s", tc.name, e)
+            return tc, f"Error: tool '{tc.name}' failed: {e}"
+
     def _process_tool_round(
         self,
         response: object,
@@ -239,66 +209,17 @@ class AIModelFacade:
         mcp_manager: MCPManager | None,
         on_tool_call: Callable[[str, dict], bool] | None,
     ) -> None:
-        """Execute one round of tool calls and append results to messages.
-
-        Parameters
-        ----------
-        response : object
-            The model response containing tool calls.
-        messages : list of dict
-            Conversation messages (mutated in place).
-        tool_messages : list of dict
-            Accumulator for tool messages.
-        tool_cache : dict
-            Cache of ``(name, args_json) -> result`` to avoid duplicates.
-        mcp_manager : MCPManager or None
-            Manager used to execute tool calls.
-        on_tool_call : callable or None
-            Approval callback for each tool invocation.
-        """
-        tool_call_msg = {
-            "role": "assistant",
-            "content": response.content,
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.name,
-                        "arguments": json.dumps(tc.arguments),
-                    },
-                }
-                for tc in response.tool_calls
-            ],
-        }
+        tool_call_msg = self._build_tool_call_msg(response)
         messages.append(tool_call_msg)
         tool_messages.append(tool_call_msg)
 
-        def _exec(tc: object) -> tuple[object, str]:
-            if on_tool_call and not on_tool_call(tc.name, tc.arguments):
-                return tc, "Tool call denied by user."
-            cache_key = (tc.name, json.dumps(tc.arguments, sort_keys=True))
-            if cache_key in tool_cache:
-                return tc, tool_cache[cache_key]
-            try:
-                if tc.name in self.virtual_tools:
-                    result = self.virtual_tools[tc.name]["handler"](tc.arguments)
-                else:
-                    result = mcp_manager.call_tool(tc.name, tc.arguments)
-                if not isinstance(result, str):
-                    result = str(result)
-                tool_cache[cache_key] = result
-                return tc, result
-            except Exception as e:
-                logger.warning("Tool call %s failed: %s", tc.name, e)
-                error_msg = f"Error: tool '{tc.name}' failed: {e}"
-                return tc, error_msg
-
-        if on_tool_call and len(response.tool_calls) > 1:
-            results = [_exec(tc) for tc in response.tool_calls]
+        exec_fn = lambda tc: self._exec_tool_call(tc, tool_cache, mcp_manager, on_tool_call)
+        sequential = on_tool_call is not None and len(response.tool_calls) > 1
+        if sequential:
+            results = [exec_fn(tc) for tc in response.tool_calls]
         else:
             with ThreadPoolExecutor(max_workers=len(response.tool_calls)) as pool:
-                results = list(pool.map(_exec, response.tool_calls))
+                results = list(pool.map(exec_fn, response.tool_calls))
 
         for tc, result in results:
             tool_result_msg = {
@@ -309,3 +230,13 @@ class AIModelFacade:
             }
             messages.append(tool_result_msg)
             tool_messages.append(tool_result_msg)
+
+    def _execute_tool(
+        self, tc: object, mcp_manager: MCPManager | None,
+    ) -> str:
+        """Dispatch a single tool call to virtual tool or MCP."""
+        if tc.name in self._virtual_tools:
+            return self._virtual_tools[tc.name].handler(tc.arguments)
+        if mcp_manager:
+            return mcp_manager.call_tool(tc.name, tc.arguments)
+        raise ValueError(f"Unknown tool: {tc.name}")

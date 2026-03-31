@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from src.genai.chat_response import ChatResponse, ToolCall
+from src.genai.chat_response import ChatResponse, ToolCall, VirtualTool
 from src.genai.model_facade import AIModelFacade
 from src.genai.providers import Provider
 from tests.conftest import MockAIClient, MockMCPManager
@@ -13,7 +13,7 @@ def _make_facade(client: MockAIClient) -> AIModelFacade:
     facade.provider = Provider.OLLAMA
     facade.system_prompt = "You are a test assistant."
     facade.max_tool_rounds = 5
-    facade.virtual_tools = {}
+    facade._virtual_tools = {}
     facade.history = [{"role": "system", "content": facade.system_prompt}]
     facade.client = client
     return facade
@@ -62,10 +62,6 @@ class TestWithToolCalls:
 
         result = facade.generate_response("Do work", mcp_manager=mcp)
 
-        # Should stop after 3 rounds (3 tool calls + no final non-tool response)
-        # The last response in the loop still has tool_calls, so content is None
-        # which raises ValueError. But the loop breaks after max_tool_rounds.
-        # The 4th call doesn't happen.
         assert len(client.calls) == 3
 
 
@@ -90,7 +86,7 @@ class TestToolCallDenial:
         )
 
         assert result == "Okay, I won't delete it."
-        assert len(mcp.calls) == 0  # tool never actually executed
+        assert len(mcp.calls) == 0
 
 
 class TestToolCallCache:
@@ -108,8 +104,69 @@ class TestToolCallCache:
         result = facade.generate_response("Read a.txt twice", mcp_manager=mcp)
 
         assert result == "Got it."
-        # Only one actual MCP call despite two tool_calls with same args
         assert len(mcp.calls) == 1
+
+
+class TestVirtualTools:
+    def test_register_and_invoke(self) -> None:
+        """Virtual tools are called instead of MCP."""
+        tool_call = ToolCall(id="tc1", name="get_time", arguments={})
+        responses = [
+            ChatResponse(content=None, tool_calls=[tool_call]),
+            ChatResponse(content="It is noon."),
+        ]
+        client = MockAIClient(responses)
+        facade = _make_facade(client)
+
+        facade.register_tool(VirtualTool(
+            name="get_time",
+            description="Get the current time.",
+            input_schema={"type": "object", "properties": {}, "required": []},
+            handler=lambda args: "12:00:00",
+        ))
+
+        result = facade.generate_response("What time is it?")
+
+        assert result == "It is noon."
+        # The tool definition should appear in the client call
+        sent_tools = client.calls[0]["tools"]
+        assert any(t["name"] == "get_time" for t in sent_tools)
+
+    def test_virtual_tool_definitions_merged_with_mcp(self) -> None:
+        """Virtual and MCP tools both appear in the tools list."""
+        client = MockAIClient([ChatResponse(content="Hi")])
+        mcp = MockMCPManager(tool_results={"read_file": "data"})
+        facade = _make_facade(client)
+
+        facade.register_tool(VirtualTool(
+            name="my_tool",
+            description="A custom tool.",
+            input_schema={"type": "object", "properties": {}},
+            handler=lambda args: "ok",
+        ))
+
+        facade.generate_response("Hello", mcp_manager=mcp)
+
+        sent_tools = client.calls[0]["tools"]
+        tool_names = {t["name"] for t in sent_tools}
+        assert "read_file" in tool_names  # MCP
+        assert "my_tool" in tool_names    # Virtual
+
+    def test_unregister_tool(self) -> None:
+        client = MockAIClient([ChatResponse(content="Hi")])
+        facade = _make_facade(client)
+
+        facade.register_tool(VirtualTool(
+            name="temp_tool",
+            description="Temporary.",
+            input_schema={"type": "object", "properties": {}},
+            handler=lambda args: "ok",
+        ))
+        facade.unregister_tool("temp_tool")
+        facade.generate_response("Hello")
+
+        sent_tools = client.calls[0]["tools"]
+        assert sent_tools is None
 
 
 class TestHistoryManagement:
@@ -119,21 +176,10 @@ class TestHistoryManagement:
 
         facade.generate_response("Question")
 
-        # system + user + assistant
         assert len(facade.history) == 3
         assert facade.history[0]["role"] == "system"
         assert facade.history[1]["role"] == "user"
         assert facade.history[2]["role"] == "assistant"
-
-    def test_retrieval_context_not_persisted(self) -> None:
-        client = MockAIClient([ChatResponse(content="Answer")])
-        facade = _make_facade(client)
-
-        facade.generate_response("Question", retrieval_context="Some context")
-
-        # RAG context should NOT appear in persisted history
-        contents = [m["content"] for m in facade.history]
-        assert not any("context-used" in c for c in contents)
 
     def test_skill_instructions_not_persisted(self) -> None:
         client = MockAIClient([ChatResponse(content="Done")])

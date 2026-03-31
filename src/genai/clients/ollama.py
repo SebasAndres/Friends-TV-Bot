@@ -2,6 +2,7 @@ import json
 from functools import lru_cache
 from logging import getLogger
 
+import httpx
 import numpy as np
 from ollama import Client
 
@@ -15,6 +16,8 @@ logger = getLogger(__name__)
 
 class OllamaClient(AIClient):
     """Ollama implementation of chat and embedding APIs."""
+
+    tool_arguments_as_dict: bool = True
 
     def __init__(self, host: str):
         """
@@ -32,7 +35,8 @@ class OllamaClient(AIClient):
         """
         if not host:
             raise ValueError("Ollama host is required.")
-        self.client = Client(host=host, timeout=120)
+        self.host = host.rstrip("/")
+        self.client = Client(host=host, timeout=600)
 
     @retry_on_transient()
     def chat(
@@ -77,32 +81,57 @@ class OllamaClient(AIClient):
                 for t in tools
             ]
 
+        if ollama_tools:
+            return self._chat_raw(model, messages, ollama_tools)
+
         try:
-            response = self.client.chat(
-                model=model,
-                messages=messages,
-                tools=ollama_tools,
+            response = self.client.chat(model=model, messages=messages)
+            return ChatResponse(
+                content=response.message.content or None,
+                tool_calls=[],
             )
-
-            content = response.message.content or None
-
-            tool_calls: list[ToolCall] = []
-            if response.message.tool_calls:
-                for tc in response.message.tool_calls:
-                    args = tc.function.arguments
-                    tool_calls.append(
-                        ToolCall(
-                            id=getattr(tc, "id", f"call_{id(tc)}"),
-                            name=tc.function.name,
-                            arguments=args if isinstance(args, dict) else json.loads(args),
-                        )
-                    )
-
-            return ChatResponse(content=content, tool_calls=tool_calls)
-
         except Exception as e:
             logger.error("Ollama chat error: %s", e)
             raise
+
+    def _chat_raw(
+        self,
+        model: str,
+        messages: list[dict],
+        tools: list[dict],
+    ) -> ChatResponse:
+        """Call Ollama chat API via raw HTTP to handle string tool args."""
+        payload = {
+            "model": model,
+            "messages": messages,
+            "tools": tools,
+            "stream": False,
+        }
+        resp = httpx.post(
+            f"{self.host}/api/chat",
+            json=payload,
+            timeout=600,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        msg = data.get("message", {})
+        content = msg.get("content") or None
+
+        tool_calls: list[ToolCall] = []
+        for tc in msg.get("tool_calls", []):
+            func = tc.get("function", {})
+            args = func.get("arguments", {})
+            if isinstance(args, str):
+                args = json.loads(args)
+            tool_calls.append(
+                ToolCall(
+                    id=f"call_{id(tc)}",
+                    name=func.get("name", ""),
+                    arguments=args,
+                )
+            )
+
+        return ChatResponse(content=content, tool_calls=tool_calls)
 
     def embed(self, model: str, texts: list[str]) -> np.ndarray:
         """
