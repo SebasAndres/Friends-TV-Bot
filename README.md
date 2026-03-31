@@ -10,7 +10,7 @@ A natural-language OS that runs as a background loop, executing commands through
 
 - Python 3.12+
 - [uv](https://docs.astral.sh/uv/)
-- An LLM provider ([Ollama](https://ollama.com/), [Gemini](https://aistudio.google.com/), [OpenRouter](https://openrouter.ai/), or [vLLM](https://docs.vllm.ai/))
+- An LLM provider ([Ollama](https://ollama.com/), [Gemini](https://aistudio.google.com/), [OpenRouter](https://openrouter.ai/), [vLLM](https://docs.vllm.ai/), or [Anthropic](https://docs.anthropic.com/))
 
 ### Install
 
@@ -36,7 +36,7 @@ cp .env.example .env
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `AI_CLIENT_PROVIDER` | — | LLM provider: `ollama`, `gemini`, or `openrouter` |
+| `AI_CLIENT_PROVIDER` | — | LLM provider: `ollama`, `gemini`, `openrouter`, `vllm`, or `anthropic` |
 | `AI_CLIENT_MODEL` | — | Model name (depends on the provider) |
 | `AI_CLIENT_FALLBACK_MODEL` | — | Comma-separated fallback models (OpenRouter only) |
 | `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL |
@@ -45,6 +45,8 @@ cp .env.example .env
 | `CONTEXT_WINDOW` | `128000` | Max context window in tokens |
 | `GOOGLE_API_KEY` | — | Google AI API key (for `gemini`) |
 | `OPENROUTER_API_KEY` | — | OpenRouter API key (for `openrouter`) |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key (for `anthropic`) |
+| `VLLM_BASE_URL` | `http://localhost:8000` | vLLM server URL |
 | `DEFAULT_CHARACTER` | random | Character filename without `.md` |
 
 ## Quick Start
@@ -328,7 +330,7 @@ Two-tier config: project-local overrides global by filename.
 ├── rules/                  # System prompt rules .md files
 ├── mcp/                    # MCP server configs (servers.json)
 ├── memory/                 # RAG indexes per namespace
-├── jobs/                   # Autojob execution logs
+├── letcook/                # Letcook task specs and logs
 ├── qubito.db               # SQLite: sessions + messages
 ├── cron.json               # Scheduled tasks
 ├── webhooks.json           # Webhook configurations
@@ -385,10 +387,10 @@ Drop a `.md` file into `agents/` or `~/.qubito/agents/` and it's instantly avail
                               │           │  AuditLog (hash chain)        │
                               │           │                               │
                               │           │  AI Providers                 │
-                              │           │  ┌──────┬────────┐            │
-                              │           │  │Ollama│ Gemini │            │
-                              │           │  │OpenR.│ vLLM   │            │
-                              │           │  └──────┴────────┘            │
+                              │           │  ┌──────┬────────┬─────────┐  │
+                              │           │  │Ollama│ Gemini │Anthropic│  │
+                              │           │  │OpenR.│ vLLM   │         │  │
+                              │           │  └──────┴────────┴─────────┘  │
                               │           └───────────────────────────────┘
 ```
 
@@ -401,7 +403,7 @@ Drop a `.md` file into `agents/` or `~/.qubito/agents/` and it's instantly avail
 | `src/daemon/` | FastAPI server, session manager, client, lifecycle |
 | `src/config/` | Two-tier path resolver |
 | `src/agents/` | Agent class, character loader, registry, delegation |
-| `src/genai/` | AI provider abstraction (Ollama, Gemini, OpenRouter) |
+| `src/genai/` | AI provider abstraction (Ollama, Gemini, OpenRouter, vLLM, Anthropic) |
 | `src/rag/` | FAISS document store with namespaced persistence |
 | `src/mcp/` | MCP tool integration with crash recovery |
 | `src/skills/` | Slash commands, letcook, cron handler |
@@ -419,5 +421,5 @@ Drop a `.md` file into `agents/` or `~/.qubito/agents/` and it's instantly avail
 
 ```bash
 uv sync --extra dev
-uv run pytest -v        # Run all tests (51 tests)
+uv run pytest -v        # Run all tests (53 tests)
 ```
