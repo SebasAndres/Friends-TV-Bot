@@ -179,8 +179,9 @@ def handle_help(agent: Agent, user_input: str) -> None:
     console.print("\n[bold]Available commands:[/bold]")
     for skill in load_all_skills():
         console.print(f"  [green]/{skill.name}[/green] — {skill.description}")
-        if skill.name == "autojob":
-            console.print("    [dim]/autojob do <task>[/dim]  — generate a program from a task description")
-            console.print("    [dim]/autojob run[/dim]        — execute the last generated program")
+        if skill.name == "letcook":
+            console.print("    [dim]/letcook init <name>[/dim]  — scaffold a new task")
+            console.print("    [dim]/letcook run <name>[/dim]   — run the autonomous loop")
+            console.print("    [dim]/letcook list[/dim]          — list existing tasks")
     console.print("  [green]/exit[/green] — Exit the program")
     console.print()

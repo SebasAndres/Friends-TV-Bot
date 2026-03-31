@@ -88,7 +88,7 @@ class CLIChannel(Channel):
                     ("/help", "commands"),
                     ("/load", "documents"),
                     ("/agent", "switch agent"),
-                    ("/autojob do", "<task>"),
+                    ("/letcook", "autonomous loop"),
                     ("/exit", "quit"),
                 ],
             )

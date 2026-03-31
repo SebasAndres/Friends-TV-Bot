@@ -231,6 +231,7 @@ class CreateSessionRequest(BaseModel):
     agent_id: str | None = None
     channel_type: str | None = None
     channel_id: str | None = None
+    headless: bool = False
 
 
 class CreateSessionResponse(BaseModel):
@@ -341,6 +342,17 @@ def _register_routes(app: FastAPI) -> None:
         if not agent_id and body.channel_type and body.channel_id and hasattr(app.state, "router"):
             agent_id = app.state.router.resolve(body.channel_type, body.channel_id)
         session = sessions.create(config, character=body.character, agent_id=agent_id)
+        if body.headless:
+            from datetime import date
+            headless_prompt = (
+                f"Today's date is {date.today().isoformat()}.\n"
+                "You are a task execution agent. Execute the user's request "
+                "using the tools available to you. Do not role-play or use "
+                "a character personality. Focus on completing the task."
+            )
+            session.agent.ai_model.history[0] = {
+                "role": "system", "content": headless_prompt,
+            }
         greeting = session.agent.get_start_message()
         return CreateSessionResponse(
             id=session.id,

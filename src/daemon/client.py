@@ -36,7 +36,7 @@ class DaemonClient:
             Daemon port. Defaults to DAEMON_PORT from constants.
         """
         base = f"http://{host or DAEMON_HOST}:{port or DAEMON_PORT}"
-        self._http = httpx.Client(base_url=base, timeout=600)
+        self._http = httpx.Client(base_url=base, timeout=1800)
 
     def is_daemon_running(self) -> bool:
         """Check if the daemon is reachable.
@@ -74,13 +74,17 @@ class DaemonClient:
         resp.raise_for_status()
         return resp.json()
 
-    def create_session(self, character: str | None = None) -> SessionData:
+    def create_session(
+        self, character: str | None = None, headless: bool = False,
+    ) -> SessionData:
         """Create a new chat session on the daemon.
 
         Parameters
         ----------
         character : str or None
             Character filename to use. Uses the server default when None.
+        headless : bool
+            If True, replace character personality with a plain task prompt.
 
         Returns
         -------
@@ -90,6 +94,8 @@ class DaemonClient:
         body: dict = {}
         if character:
             body["character"] = character
+        if headless:
+            body["headless"] = True
         resp = self._http.post("/sessions", json=body)
         resp.raise_for_status()
         data = resp.json()
@@ -149,6 +155,7 @@ class DaemonClient:
         self,
         session_id: str,
         message: str,
+        skill_instructions: str | None = None,
     ) -> dict:
         """Send a message and return the full response payload.
 
@@ -158,6 +165,8 @@ class DaemonClient:
             Full JSON with ``response``, ``elapsed``, and ``is_handler``.
         """
         body: dict = {"session_id": session_id, "message": message}
+        if skill_instructions:
+            body["skill_instructions"] = skill_instructions
         resp = self._http.post("/message", json=body)
         resp.raise_for_status()
         return resp.json()

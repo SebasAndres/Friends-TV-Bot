@@ -67,6 +67,7 @@ uv run qubito chat
 qubito chat                      # Interactive terminal chat
 qubito chat -c joey              # Chat with a specific character
 qubito chat --pick               # Pick a character interactively
+qubito -p "your prompt here"     # Send a single prompt, print response, exit
 
 qubito daemon start              # Start daemon in background
 qubito daemon start --foreground # Run in foreground (for systemd)
@@ -229,7 +230,7 @@ Type these in any chat interface:
 | `/stats` | Response time statistics |
 | `/context-usage` | Context window usage |
 | `/cron add\|list\|remove` | Manage scheduled tasks |
-| `/autojob <task>` | Generate and execute an autonomous job |
+| `/letcook init\|run\|list` | Autonomous producer/evaluator loop |
 | `/help` | List all available commands |
 
 ## Cron / Scheduled Tasks
@@ -403,7 +404,7 @@ Drop a `.md` file into `agents/` or `~/.qubito/agents/` and it's instantly avail
 | `src/genai/` | AI provider abstraction (Ollama, Gemini, OpenRouter) |
 | `src/rag/` | FAISS document store with namespaced persistence |
 | `src/mcp/` | MCP tool integration with crash recovery |
-| `src/skills/` | Slash commands, autojob, cron handler |
+| `src/skills/` | Slash commands, letcook, cron handler |
 | `src/scheduler/` | Cron job scheduler with croniter |
 | `src/webhooks/` | Webhook receiver with HMAC verification |
 | `src/tasks/` | Background task queue |

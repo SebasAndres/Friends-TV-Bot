@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import sys
 
 
 def _logging_setup() -> None:
@@ -24,6 +25,10 @@ def _build_parser() -> argparse.ArgumentParser:
     cp = sub.add_parser("chat", help="Interactive terminal chat")
     cp.add_argument("-c", "--character", default=None, help="Character name to use (e.g. joey)")
     cp.add_argument("--pick", action="store_true", help="Interactively pick a character")
+
+    pp = sub.add_parser("prompt", help="Send a single prompt and print the response")
+    pp.add_argument("text", help="The prompt text to send")
+    pp.add_argument("-c", "--character", default=None, help="Character name to use")
     sub.add_parser("init", help="Set up ~/.qubito/")
 
     np = sub.add_parser("new-project", help="Create .qubito/ overrides in a project directory")
@@ -50,6 +55,10 @@ def main() -> None:
     """CLI entry point."""
     _logging_setup()
 
+    # Support `qubito -p "prompt"` as shorthand for `qubito prompt "prompt"`
+    if len(sys.argv) >= 3 and sys.argv[1] == "-p":
+        sys.argv = [sys.argv[0], "prompt"] + sys.argv[2:]
+
     parser = _build_parser()
     args = parser.parse_args()
 
@@ -61,6 +70,9 @@ def main() -> None:
             character=getattr(args, "character", None),
             pick=getattr(args, "pick", False),
         )
+    elif command == "prompt":
+        from src.cli.cmd_prompt import run_prompt
+        run_prompt(text=args.text, character=getattr(args, "character", None))
     elif command == "init":
         from src.cli.cmd_init import run_init
         run_init()

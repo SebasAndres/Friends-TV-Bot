@@ -183,9 +183,10 @@ def print_warning(text: str) -> None:
 
 _LOAD_PREFIXES = ("/load ", "/load\t")
 
-_AUTOJOB_SUBCOMMANDS = [
-    ("do", "generate plan only"),
-    ("run", "execute a plan"),
+_LETCOOK_SUBCOMMANDS = [
+    ("init", "scaffold a new task"),
+    ("run", "run the autonomous loop"),
+    ("list", "list existing tasks"),
 ]
 
 
@@ -210,16 +211,16 @@ class _AppCompleter(Completer):
             yield from self._path_completer.get_completions(sub_doc, complete_event)
             return
 
-        # After "/autojob run " → complete existing job names
-        if text.startswith("/autojob run "):
-            typed_job = text[len("/autojob run "):]
-            yield from self._complete_jobs(typed_job)
+        # After "/letcook run " → complete existing task names
+        if text.startswith("/letcook run "):
+            typed_task = text[len("/letcook run "):]
+            yield from self._complete_letcook_tasks(typed_task)
             return
 
-        # After "/autojob " → complete subcommands
-        if text.startswith("/autojob "):
-            typed_sub = text[len("/autojob "):]
-            for sub, desc in _AUTOJOB_SUBCOMMANDS:
+        # After "/letcook " → complete subcommands
+        if text.startswith("/letcook "):
+            typed_sub = text[len("/letcook "):]
+            for sub, desc in _LETCOOK_SUBCOMMANDS:
                 if sub.startswith(typed_sub):
                     yield Completion(
                         sub,
@@ -262,13 +263,13 @@ class _AppCompleter(Completer):
                     )
 
     @staticmethod
-    def _complete_jobs(typed: str) -> list[Completion]:
-        """Yield completions for existing job directory names."""
-        jobs_dir = Path.home() / ".qubito" / "jobs"
-        if not jobs_dir.is_dir():
+    def _complete_letcook_tasks(typed: str) -> list[Completion]:
+        """Yield completions for existing letcook task directory names."""
+        tasks_dir = Path.home() / ".qubito" / "letcook"
+        if not tasks_dir.is_dir():
             return []
-        for d in sorted(jobs_dir.iterdir()):
-            if d.is_dir() and (d / "program.md").exists():
+        for d in sorted(tasks_dir.iterdir()):
+            if d.is_dir() and (d / "specs" / "program.md").exists():
                 if d.name.startswith(typed):
                     yield Completion(
                         d.name,
