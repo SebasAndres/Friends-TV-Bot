@@ -235,6 +235,42 @@ Type these in any chat interface:
 | `/letcook init\|run\|list` | Autonomous producer/evaluator loop |
 | `/help` | List all available commands |
 
+## MCP Tools
+
+Agents use [MCP](https://modelcontextprotocol.io/) to access external tools. Servers are defined in `mcp_servers.json` or `~/.qubito/mcp/servers.json`:
+
+```json
+{
+  "my-server": {
+    "command": "python",
+    "args": ["path/to/server.py"],
+    "lazy": true,
+    "env": { "API_KEY": "${MY_KEY}" }
+  }
+}
+```
+
+Built-in servers: `shell` (run commands), `file-manager` (CRUD files), `led-control` (home LEDs), `duckduckgo-search` (web search).
+
+Create your own with [FastMCP](https://github.com/modelcontextprotocol/python-sdk):
+
+```python
+from mcp.server.fastmcp import FastMCP
+mcp = FastMCP("my-tools")
+
+@mcp.tool()
+def my_tool(query: str) -> str:
+    """Search something."""
+    return f"Result for {query}"
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+Test interactively: `npx @modelcontextprotocol/inspector python path/to/server.py`
+
+See [docs/mcp.md](docs/mcp.md) for the full guide on configuration, lazy loading, virtual tools, and external servers.
+
 ## Cron / Scheduled Tasks
 
 Run tasks on a schedule. Jobs are stored in `~/.qubito/cron.json`.
